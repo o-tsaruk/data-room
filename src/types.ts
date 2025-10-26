@@ -3,5 +3,4 @@ export interface File {
   id: string;
   url: string;
   mimeType?: string;
-  size?: number;
 }

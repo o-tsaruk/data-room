@@ -27,10 +27,6 @@ export default function Home() {
   const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
 
   useEffect(() => {
-    console.log('API_KEY:', API_KEY ? 'Set' : 'NOT SET');
-    console.log('CLIENT_ID:', CLIENT_ID ? 'Set' : 'NOT SET');
-    console.log('APP_ID:', APP_ID ? 'Set' : 'NOT SET');
-
     if (!API_KEY || !CLIENT_ID || !APP_ID) {
       console.error('Missing Google API credentials! Please check your .env.local file.');
     }
@@ -71,7 +67,6 @@ export default function Home() {
     try {
       await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
       setIsPickerReady(true);
-      console.log('Google Picker API initialized');
     } catch (error) {
       console.error('Error initializing picker:', error);
     }
@@ -84,7 +79,6 @@ export default function Home() {
       callback: '',
     });
     setIsGisReady(true);
-    console.log('Google Identity Services initialized');
   };
 
   const createPicker = (token: string | null) => {
@@ -119,7 +113,6 @@ export default function Home() {
         id: doc[window.google.picker.Document.ID],
         url: doc[window.google.picker.Document.URL],
         mimeType: doc[window.google.picker.Document.MIME_TYPE],
-        size: doc[window.google.picker.Document.SIZE_BYTES],
       }));
 
       setSelectedFiles((prev) => [...prev, ...files]);
