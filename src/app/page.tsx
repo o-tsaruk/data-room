@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FileList from '@/src/components/FileList';
 import { File } from '@/src/types';
+import { formatTimestampUTC } from '../utils/common';
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -22,9 +23,10 @@ export default function Home() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isPickerReady, setIsPickerReady] = useState(false);
   const [isGisReady, setIsGisReady] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const tokenClientRef = useRef<any>(null);
 
-  const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+  const SCOPES = 'https://www.googleapis.com/auth/drive.readonly openid email profile';
 
   useEffect(() => {
     if (!API_KEY || !CLIENT_ID || !APP_ID) {
@@ -62,6 +64,35 @@ export default function Home() {
     };
     document.head.appendChild(gisScript);
   }, []);
+
+  useEffect(() => {
+    fetchUserFilesFromDB()
+      .then(() => {})
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  const fetchUserFilesFromDB = async () => {
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) return;
+
+      const res = await fetch('/api/files', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-token': sessionToken,
+        },
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch files from DB');
+      const data: { files: File[] } = await res.json();
+      setSelectedFiles(data.files ?? []);
+    } catch (err) {
+      console.error('Error loading files from DB:', err);
+    }
+  };
 
   const initializePicker = async () => {
     try {
@@ -112,12 +143,12 @@ export default function Home() {
         name: doc[window.google.picker.Document.NAME],
         id: doc[window.google.picker.Document.ID],
         url: doc[window.google.picker.Document.URL],
+        iconUrl: doc[window.google.picker.Document.ICON_URL],
+        lastEditedDate: formatTimestampUTC(doc[window.google.picker.Document.LAST_EDITED_UTC]),
         mimeType: doc[window.google.picker.Document.MIME_TYPE],
       }));
 
       setSelectedFiles((prev) => [...prev, ...files]);
-
-      // Mock storing to DB
       storeFilesInDB(files);
     }
   };
@@ -134,8 +165,18 @@ export default function Home() {
         return;
       }
 
-      setAccessToken(response.access_token);
-      createPicker(response.access_token);
+      const accessToken = response.access_token;
+      setAccessToken(accessToken);
+
+      const sessionRes = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken }),
+      });
+      const { session_token } = await sessionRes.json();
+      localStorage.setItem('session_token', session_token);
+
+      createPicker(accessToken);
     };
 
     if (accessToken === null) {
@@ -145,17 +186,52 @@ export default function Home() {
     }
   };
 
-  // Mock function to store files in DB
   const storeFilesInDB = async (files: File[]) => {
-    console.log('Mock: Storing files in database:', files);
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+
+      const res = await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_token: sessionToken, files }),
+      });
+
+      if (!res.ok) throw new Error('Failed to store files');
+      console.log('Files saved successfully');
+
+      await fetchUserFilesFromDB();
+    } catch (err) {
+      console.error('Error saving files:', err);
+    }
   };
 
-  const handleClearFiles = () => {
-    setSelectedFiles([]);
-  };
+  const handleRemoveFile = async (fileId: string) => {
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
+        console.error('No session token found');
+        return;
+      }
 
-  const handleRemoveFile = (fileId: string) => {
-    setSelectedFiles((prev) => prev.filter((file) => file.id !== fileId));
+      const res = await fetch(`/api/files?fileId=${fileId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-token': sessionToken,
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error('Failed to delete file:', errorData.error || res.statusText);
+        return;
+      }
+
+      console.log('File deleted successfully');
+      await fetchUserFilesFromDB();
+    } catch (err) {
+      console.error('Error deleting file:', err);
+    }
   };
 
   return (
@@ -170,12 +246,9 @@ export default function Home() {
       </header>
 
       <main className='max-w-6xl mx-auto px-6 py-10'>
-        <FileList
-          files={selectedFiles}
-          onOpen={handleOpenPicker}
-          onRemove={handleRemoveFile}
-          onClear={handleClearFiles}
-        />
+        {!isLoading && (
+          <FileList files={selectedFiles} onOpen={handleOpenPicker} onRemove={handleRemoveFile} />
+        )}
       </main>
 
       <div className='fixed bottom-6 right-6 z-20'>
