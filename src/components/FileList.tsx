@@ -51,30 +51,29 @@ interface FileListProps {
 export default function FileList({ files, onOpen, onRemove }: FileListProps) {
   const columns: ColumnDef<File>[] = [
     {
-    accessorKey: 'name',
-    header: 'Name',
-    cell: ({ row }) => {
-      const iconUrl = row.original.iconUrl;
-      const name = row.getValue('name') as string;
-      const truncated =
-        name.length > 40 ? name.slice(0, 37).trimEnd() + '...' : name;
+      accessorKey: 'name',
+      header: 'Name',
+      cell: ({ row }) => {
+        const iconUrl = row.original.iconUrl;
+        const name = row.getValue('name') as string;
+        const truncated = name.length > 40 ? name.slice(0, 37).trimEnd() + '...' : name;
 
-      return (
-        <div className="flex items-center gap-2 max-w-[400px]">
-          {iconUrl && (
-            <Image
-              width={16}
-              height={16}
-              src={iconUrl}
-              alt="file type icon"
-              className="shrink-0"
-            />
-          )}
-          <span className="font-medium text-gray-800 truncate">{truncated}</span>
-        </div>
-      );
+        return (
+          <div className='flex items-center gap-2 max-w-[400px]'>
+            {iconUrl && (
+              <Image
+                width={16}
+                height={16}
+                src={iconUrl}
+                alt='file type icon'
+                className='shrink-0'
+              />
+            )}
+            <span className='font-medium text-gray-800 truncate'>{truncated}</span>
+          </div>
+        );
+      },
     },
-  },
     {
       accessorKey: 'uploadedAt',
       header: ({ column }) => {
@@ -134,9 +133,7 @@ export default function FileList({ files, onOpen, onRemove }: FileListProps) {
     },
   ];
 
-  const [sorting, setSorting] = React.useState<SortingState>([
-    { id: 'uploadedAt', desc: true }, 
-  ]);
+  const [sorting, setSorting] = React.useState<SortingState>([{ id: 'uploadedAt', desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   const table = useReactTable({
