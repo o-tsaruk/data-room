@@ -1,12 +1,7 @@
+import { GeistSans } from 'geist/font/sans';
 import type { Metadata } from 'next';
-import { Roboto } from 'next/font/google';
 import './globals.css';
-
-const roboto = Roboto({
-  weight: ['400', '700'],
-  subsets: ['latin', 'cyrillic'],
-  variable: '--font-roboto',
-});
+import NextAuthProvider from './session-provider';
 
 export const metadata: Metadata = {
   title: 'Data Room',
@@ -21,7 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang='uk'>
-      <body className={`${roboto.variable}`}>{children}</body>
+      <body className={GeistSans.className}>
+        <NextAuthProvider>{children}</NextAuthProvider>
+      </body>
     </html>
   );
 }

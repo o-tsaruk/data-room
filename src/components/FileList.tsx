@@ -93,7 +93,9 @@ export default function FileList({ files, onOpen, onRemove }: FileListProps) {
       },
       cell: ({ row }) => {
         const uploadedAt = row.getValue('uploadedAt') as string;
-        return uploadedAt ? <div className='text-gray-600'>{formatTimestampUTC(uploadedAt) || 'Unknown'}</div> : null;
+        return uploadedAt ? (
+          <div className='text-gray-600'>{formatTimestampUTC(uploadedAt) || 'Unknown'}</div>
+        ) : null;
       },
     },
     {
