@@ -12,4 +12,5 @@ export interface File {
   iconUrl: string;
   lastEditedDate: string;
   mimeType: string;
+  starred?: boolean;
 }

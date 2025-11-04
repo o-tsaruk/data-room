@@ -30,6 +30,7 @@ export async function GET(req: Request) {
       url: f.url,
       iconUrl: f.icon_url,
       mimeType: f.mime_type,
+      starred: f.starred,
       lastEditedDate: f.last_edited,
       uploadedAt: f.uploaded_at,
     }));
@@ -77,20 +78,21 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const fileId = searchParams.get('fileId');
+    const deleteAll = searchParams.get('all') === 'true';
 
     const session = await serverSession();
     const email = session?.user?.email;
     if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-    if (!fileId) {
-      return NextResponse.json({ error: 'Missing file ID' }, { status: 400 });
+    let error;
+    if (deleteAll) {
+      ({ error } = await supabase.from('files').delete().eq('user_email', email));
+    } else {
+      if (!fileId) {
+        return NextResponse.json({ error: 'Missing file ID' }, { status: 400 });
+      }
+      ({ error } = await supabase.from('files').delete().eq('id', fileId).eq('user_email', email));
     }
-
-    const { error } = await supabase
-      .from('files')
-      .delete()
-      .eq('id', fileId)
-      .eq('user_email', email);
 
     if (error) {
       console.error('Error deleting file:', error);

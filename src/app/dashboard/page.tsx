@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
+import { signOut } from 'next-auth/react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import DuplicateResolver from '@/src/components/DuplicateResolver';
 import FileList from '@/src/components/FileList';
+import Settings from '@/src/components/Settings';
+import Sidebar from '@/src/components/Sidebar';
 import { File } from '@/src/types';
 import { formatTimestampUTC } from '@/src/utils/common';
 
@@ -25,6 +31,12 @@ export default function Home() {
   const [isGisReady, setIsGisReady] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const tokenClientRef = useRef<any>(null);
+  const [activeView, setActiveView] = useState<
+    'files' | 'recent' | 'starred' | 'media' | 'settings'
+  >('files');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [conflicts, setConflicts] = useState<File[] | null>(null);
+  const [nonConflicting, setNonConflicting] = useState<File[]>([]);
 
   const SCOPES = 'https://www.googleapis.com/auth/drive.readonly openid email profile';
 
@@ -32,9 +44,7 @@ export default function Home() {
     if (!API_KEY || !CLIENT_ID || !APP_ID) {
       console.error('Missing Google API credentials! Please check your .env.local file.');
     }
-  }, []);
 
-  useEffect(() => {
     if (window.gapi && window.google) {
       setIsPickerReady(true);
       setIsGisReady(true);
@@ -66,11 +76,17 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchUserFilesFromDB()
-      .then(() => {})
-      .finally(() => {
-        setIsLoading(false);
-      });
+    const onHashChange = () => {
+      const key = window.location.hash.replace('#', '') as typeof activeView;
+      if (['files', 'recent', 'starred', 'media', 'settings'].includes(key)) {
+        setActiveView(key);
+      } else {
+        setActiveView('files');
+      }
+    };
+    onHashChange();
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   useEffect(() => {
@@ -82,6 +98,14 @@ export default function Home() {
     };
 
     loadSession();
+  }, []);
+
+  useEffect(() => {
+    fetchUserFilesFromDB()
+      .then(() => {})
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   const fetchUserFilesFromDB = async () => {
@@ -150,8 +174,22 @@ export default function Home() {
         mimeType: doc[window.google.picker.Document.MIME_TYPE],
       }));
 
-      setSelectedFiles((prev) => [...prev, ...files]);
-      storeFilesInDB(files);
+      const existing = selectedFiles;
+      const conflictsFound: File[] = [];
+      const rest: File[] = [];
+      for (const f of files) {
+        const dup = existing.some((e) => e.name === f.name && e.mimeType === f.mimeType);
+        if (dup) conflictsFound.push(f);
+        else rest.push(f);
+      }
+
+      if (conflictsFound.length > 0) {
+        setConflicts(conflictsFound);
+        setNonConflicting(rest);
+      } else {
+        setSelectedFiles((prev) => [...prev, ...rest]);
+        storeFilesInDB(rest);
+      }
     }
   };
 
@@ -210,11 +248,77 @@ export default function Home() {
       });
 
       if (!res.ok) throw new Error('Failed to store files');
-      console.log('Files saved successfully');
+      toast.success('Files saved successfully.');
 
       await fetchUserFilesFromDB();
     } catch (err) {
       console.error('Error saving files:', err);
+    }
+  };
+
+  const filteredFiles = () => {
+    if (activeView === 'recent') {
+      return [...selectedFiles].slice(0, 5);
+    }
+    if (activeView === 'starred') {
+      // Starred is server-provided property; if absent, treat as false
+      return selectedFiles.filter((f: any) => f.starred === true);
+    }
+    if (activeView === 'media') {
+      return selectedFiles.filter(
+        (f) => f.mimeType?.startsWith('image/') || f.mimeType?.startsWith('video/'),
+      );
+    }
+    return selectedFiles;
+  };
+
+  const handleToggleStar = async (fileId: string, starred: boolean) => {
+    // Optimistic update to avoid re-sorting jump
+    const prev = selectedFiles;
+    setSelectedFiles((curr) => curr.map((f) => (f.id === fileId ? { ...f, starred } : f)));
+    try {
+      const res = await fetch('/api/files/starred', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, starred }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        console.error('Failed to update starred:', data.error || res.statusText);
+        setSelectedFiles(prev);
+      }
+    } catch (e) {
+      console.error('Star toggle error:', e);
+      setSelectedFiles(prev);
+    }
+  };
+
+  const handleDeleteAllFiles = async () => {
+    try {
+      const res = await fetch('/api/files?all=true', { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        console.error('Failed to delete all files:', data.error || res.statusText);
+        return;
+      }
+      toast.success('All files deleted.');
+      await fetchUserFilesFromDB();
+    } catch (e) {
+      console.error('Delete all files error:', e);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const res = await fetch('/api/account', { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        console.error('Failed to delete account:', data.error || res.statusText);
+        return;
+      }
+      await signOut({ callbackUrl: '/login' });
+    } catch (e) {
+      console.error('Delete account error:', e);
     }
   };
 
@@ -231,7 +335,7 @@ export default function Home() {
         return;
       }
 
-      console.log('File deleted successfully');
+      toast.success('File deleted successfully.');
       await fetchUserFilesFromDB();
     } catch (err) {
       console.error('Error deleting file:', err);
@@ -239,26 +343,84 @@ export default function Home() {
   };
 
   return (
-    <div className='min-h-screen bg-gray-50 text-gray-800'>
-      <header className='sticky top-0 z-10'>
-        <div className='max-w-6xl px-6 py-3 flex items-center justify-between'>
-          <div className='flex items-center space-x-3'>
-            <img src='/logo.png' alt='Data Room Logo' className='h-14 w-14 object-contain' />
-            <h1 className='text-3xl'>Data Room</h1>
+    <div className='min-h-screen bg-gray-50 text-gray-800 flex'>
+      <Sidebar />
+      <div className='flex-1'>
+        <main className='max-w-6xl mx-auto px-6 py-10'>
+          <div className='mb-6'>
+            <h1 className='text-2xl capitalize'>{activeView}</h1>
           </div>
-        </div>
-      </header>
 
-      <main className='max-w-6xl mx-auto px-6 py-10'>
-        {!isLoading && (
-          <FileList files={selectedFiles} onOpen={handleOpenPicker} onRemove={handleRemoveFile} />
+          {!isLoading && activeView !== 'settings' && (
+            <>
+              <div className='w-full mb-4'>
+                <Input
+                  placeholder='Search file'
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchTerm(e.target.value)
+                  }
+                  className='w-full bg-white border border-gray-200 shadow-sm'
+                  disabled={filteredFiles().length === 0}
+                />
+              </div>
+              <FileList
+                files={filteredFiles()}
+                onOpen={handleOpenPicker}
+                onRemove={handleRemoveFile}
+                searchTerm={searchTerm}
+                onToggleStar={handleToggleStar}
+                emptyTitle={
+                  activeView === 'media'
+                    ? 'The media storage is empty.'
+                    : activeView === 'starred'
+                      ? 'No starred files yet.'
+                      : 'The file storage is empty.'
+                }
+                emptyDescription={
+                  activeView === 'media'
+                    ? 'Load images or videos to see them here.'
+                    : activeView === 'starred'
+                      ? 'Star files to quickly find them later.'
+                      : 'Get started by adding files from your Google Drive.'
+                }
+                emptyButtonLabel={activeView === 'starred' ? 'Add Files' : 'Add Your First File'}
+                hideEmptyButton={activeView === 'media' || activeView === 'starred'}
+              />
+            </>
+          )}
+          {!isLoading && activeView === 'settings' && (
+            <Settings
+              onDeleteAllFiles={handleDeleteAllFiles}
+              onDeleteAccount={handleDeleteAccount}
+            />
+          )}
+          {conflicts && conflicts.length > 0 && (
+            <DuplicateResolver
+              conflicts={conflicts}
+              onCancel={() => {
+                setConflicts(null);
+                setNonConflicting([]);
+              }}
+              onComplete={(resolved) => {
+                const toSave = [...nonConflicting, ...resolved];
+                setConflicts(null);
+                setNonConflicting([]);
+                if (toSave.length > 0) {
+                  setSelectedFiles((prev) => [...prev, ...toSave]);
+                  storeFilesInDB(toSave);
+                }
+              }}
+            />
+          )}
+        </main>
+        {activeView !== 'settings' && (
+          <div className='fixed bottom-6 right-6 z-20'>
+            <Button onClick={handleOpenPicker} className='h-12 px-5 text-sm'>
+              <Plus className='h-8 w-8' /> Upload New File
+            </Button>
+          </div>
         )}
-      </main>
-
-      <div className='fixed bottom-6 right-6 z-20'>
-        <Button onClick={handleOpenPicker} className='text-lg'>
-          <Plus className='h-8 w-8' /> Upload New File
-        </Button>
       </div>
     </div>
   );
