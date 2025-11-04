@@ -73,6 +73,17 @@ export default function Home() {
       });
   }, []);
 
+  useEffect(() => {
+    const loadSession = async () => {
+      const res = await fetch('/api/session');
+      if (!res.ok) return console.error('Failed to fetch session');
+      const data = await res.json();
+      setAccessToken(data.session.token);
+    };
+
+    loadSession();
+  }, []);
+
   const fetchUserFilesFromDB = async () => {
     try {
       const sessionToken = localStorage.getItem('session_token');
@@ -153,36 +164,57 @@ export default function Home() {
     }
   };
 
-  const handleOpenPicker = () => {
+  const handleOpenPicker = async () => {
     if (!isPickerReady || !isGisReady) {
       alert('Google Picker is not ready yet. Please wait.');
       return;
     }
 
-    tokenClientRef.current.callback = async (response: any) => {
-      if (response.error !== undefined) {
-        console.error('Error getting access token:', response.error);
-        return;
+    // Try to get token from session first
+    let token = accessToken;
+
+    if (!token) {
+      try {
+        const res = await fetch('/api/session');
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.token) {
+            token = data.token;
+            setAccessToken(token);
+            console.log('Got Google token from session');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to get session token:', err);
       }
+    }
 
-      const accessToken = response.access_token;
-      setAccessToken(accessToken);
+    if (!token) {
+      console.log('No stored token, requesting new access token...');
+      tokenClientRef.current.callback = async (response: any) => {
+        if (response.error !== undefined) {
+          console.error('Error getting access token:', response.error);
+          return;
+        }
 
-      const sessionRes = await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: accessToken }),
-      });
-      const { session_token } = await sessionRes.json();
-      localStorage.setItem('session_token', session_token);
+        const newToken = response.access_token;
+        setAccessToken(newToken);
 
-      createPicker(accessToken);
-    };
+        const sessionRes = await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: newToken }),
+        });
 
-    if (accessToken === null) {
+        const { session_token } = await sessionRes.json();
+        localStorage.setItem('session_token', session_token);
+
+        createPicker(newToken);
+      };
+
       tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
     } else {
-      createPicker(accessToken);
+      createPicker(token);
     }
   };
 

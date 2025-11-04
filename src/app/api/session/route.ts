@@ -1,7 +1,7 @@
-// app/api/session/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
+import { serverSession } from '@/src/auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,4 +44,15 @@ export async function POST(req: Request) {
     console.error('Session error', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+}
+
+export async function GET(req: Request) {
+  const session = await serverSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
+  return NextResponse.json({
+    session,
+  });
 }
