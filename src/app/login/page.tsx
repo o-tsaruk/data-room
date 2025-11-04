@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { AuthErrorDialog } from '@/src/components/AuthErrorDialog';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -17,6 +18,10 @@ export default function LoginPage() {
 
   return (
     <div className='flex min-h-screen items-center justify-center bg-muted/30'>
+      <Suspense fallback={null}>
+        <AuthErrorDialog />
+      </Suspense>
+
       <Card className='w-full max-w-md shadow-lg'>
         <CardHeader>
           <CardTitle className='text-center text-2xl '>Welcome to Data Room</CardTitle>

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { serverSession } from '@/src/auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,23 +9,14 @@ const supabase = createClient(
 
 export async function GET(req: Request) {
   try {
-    const sessionToken = req.headers.get('x-session-token');
-    if (!sessionToken) {
-      return NextResponse.json({ files: [] });
-    }
-
-    const { data: user } = await supabase
-      .from('users')
-      .select('id')
-      .eq('session_token', sessionToken)
-      .single();
-
-    if (!user) return NextResponse.json({ files: [] });
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ files: [] });
 
     const { data: files, error } = await supabase
       .from('files')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_email', email)
       .order('uploaded_at', { ascending: false });
 
     if (error) {
@@ -38,6 +30,7 @@ export async function GET(req: Request) {
       url: f.url,
       iconUrl: f.icon_url,
       mimeType: f.mime_type,
+      starred: f.starred,
       lastEditedDate: f.last_edited,
       uploadedAt: f.uploaded_at,
     }));
@@ -51,32 +44,23 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { session_token, files } = await req.json();
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-    if (!session_token) {
-      return NextResponse.json({ error: 'Missing session token' }, { status: 401 });
-    }
+    const { files } = await req.json();
 
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('session_token', session_token)
-      .single();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 });
-    }
-
-    const newFiles = files.map((f: any) => ({
-      id: f.id,
-      user_id: user.id,
+    const newFiles = (files ?? []).map((f: any) => ({
+      user_email: email,
       name: f.name,
       url: f.url,
       icon_url: f.iconUrl,
       mime_type: f.mimeType,
     }));
 
-    const { error } = await supabase.from('files').upsert(newFiles, { onConflict: 'id' });
+    if (newFiles.length === 0) return NextResponse.json({ success: true });
+
+    const { error } = await supabase.from('files').insert(newFiles);
 
     if (error) {
       console.error('Error upserting files:', error);
@@ -94,27 +78,21 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const fileId = searchParams.get('fileId');
-    const sessionToken = req.headers.get('x-session-token');
+    const deleteAll = searchParams.get('all') === 'true';
 
-    if (!sessionToken) {
-      return NextResponse.json({ error: 'Missing session token' }, { status: 401 });
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    let error;
+    if (deleteAll) {
+      ({ error } = await supabase.from('files').delete().eq('user_email', email));
+    } else {
+      if (!fileId) {
+        return NextResponse.json({ error: 'Missing file ID' }, { status: 400 });
+      }
+      ({ error } = await supabase.from('files').delete().eq('id', fileId).eq('user_email', email));
     }
-
-    if (!fileId) {
-      return NextResponse.json({ error: 'Missing file ID' }, { status: 400 });
-    }
-
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('session_token', sessionToken)
-      .single();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 });
-    }
-
-    const { error } = await supabase.from('files').delete().eq('id', fileId).eq('user_id', user.id);
 
     if (error) {
       console.error('Error deleting file:', error);
