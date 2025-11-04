@@ -78,7 +78,7 @@ export default function Home() {
       const res = await fetch('/api/session');
       if (!res.ok) return console.error('Failed to fetch session');
       const data = await res.json();
-      setAccessToken(data.session.token);
+      setAccessToken(data.session?.token ?? null);
     };
 
     loadSession();
@@ -86,16 +86,7 @@ export default function Home() {
 
   const fetchUserFilesFromDB = async () => {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      if (!sessionToken) return;
-
-      const res = await fetch('/api/files', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-session-token': sessionToken,
-        },
-      });
+      const res = await fetch('/api/files', { method: 'GET' });
 
       if (!res.ok) throw new Error('Failed to fetch files from DB');
       const data: { files: File[] } = await res.json();
@@ -178,8 +169,9 @@ export default function Home() {
         const res = await fetch('/api/session');
         if (res.ok) {
           const data = await res.json();
-          if (data?.token) {
-            token = data.token;
+          const maybeToken = data?.session?.token;
+          if (maybeToken) {
+            token = maybeToken;
             setAccessToken(token);
             console.log('Got Google token from session');
           }
@@ -200,15 +192,6 @@ export default function Home() {
         const newToken = response.access_token;
         setAccessToken(newToken);
 
-        const sessionRes = await fetch('/api/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ access_token: newToken }),
-        });
-
-        const { session_token } = await sessionRes.json();
-        localStorage.setItem('session_token', session_token);
-
         createPicker(newToken);
       };
 
@@ -220,12 +203,10 @@ export default function Home() {
 
   const storeFilesInDB = async (files: File[]) => {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-
       const res = await fetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_token: sessionToken, files }),
+        body: JSON.stringify({ files }),
       });
 
       if (!res.ok) throw new Error('Failed to store files');
@@ -239,18 +220,9 @@ export default function Home() {
 
   const handleRemoveFile = async (fileId: string) => {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      if (!sessionToken) {
-        console.error('No session token found');
-        return;
-      }
-
       const res = await fetch(`/api/files?fileId=${fileId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-session-token': sessionToken,
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!res.ok) {

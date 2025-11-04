@@ -1,4 +1,5 @@
 import { SupabaseAdapter } from '@auth/supabase-adapter';
+import { createClient } from '@supabase/supabase-js';
 import { GetServerSidePropsContext, NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession, NextAuthOptions } from 'next-auth';
 import EmailProvider from 'next-auth/providers/email';
@@ -34,6 +35,25 @@ const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user }) {
+      try {
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        );
+
+        const email = user.email ?? undefined;
+        if (!email) return true;
+
+        const name = user.name ?? null;
+        const image = (user as any).image ?? null;
+
+        await supabase.from('users').upsert([{ email, name, image }], { onConflict: 'email' });
+      } catch (e) {
+        console.error('User upsert failed:', e);
+      }
+      return true;
+    },
     jwt: async ({ token, user, account }) => {
       if (account && account.access_token) {
         token.accessToken = account.access_token;
