@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import DuplicateResolver from '@/src/components/DuplicateResolver';
 import FileList from '@/src/components/FileList';
+import LogoutButton from '@/src/components/LogoutButton';
 import Settings from '@/src/components/Settings';
 import Sidebar from '@/src/components/Sidebar';
 import { File } from '@/src/types';
@@ -25,6 +27,8 @@ declare global {
 }
 
 export default function Home() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isPickerReady, setIsPickerReady] = useState(false);
@@ -39,6 +43,12 @@ export default function Home() {
   const [nonConflicting, setNonConflicting] = useState<File[]>([]);
 
   const SCOPES = 'https://www.googleapis.com/auth/drive.readonly openid email profile';
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
 
   useEffect(() => {
     if (!API_KEY || !CLIENT_ID || !APP_ID) {
@@ -342,15 +352,26 @@ export default function Home() {
     }
   };
 
+  if (status === 'loading' || status === 'unauthenticated') {
+    return null;
+  }
+
   return (
     <div className='min-h-screen bg-gray-50 text-gray-800 flex'>
       <Sidebar />
       <div className='flex-1'>
-        <main className='max-w-6xl mx-auto px-6 py-10'>
-          <div className='mb-6'>
+        <header className='sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 py-4'>
+          <div className='max-w-6xl mx-auto flex items-center justify-between'>
             <h1 className='text-2xl capitalize'>{activeView}</h1>
+            <div className='flex items-center gap-3'>
+              {session?.user?.email && (
+                <span className='text-sm text-gray-600 hidden sm:inline'>{session.user.email}</span>
+              )}
+              <LogoutButton />
+            </div>
           </div>
-
+        </header>
+        <main className='max-w-6xl mx-auto px-6 py-10'>
           {!isLoading && activeView !== 'settings' && (
             <>
               <div className='w-full mb-4'>
@@ -370,22 +391,7 @@ export default function Home() {
                 onRemove={handleRemoveFile}
                 searchTerm={searchTerm}
                 onToggleStar={handleToggleStar}
-                emptyTitle={
-                  activeView === 'media'
-                    ? 'The media storage is empty.'
-                    : activeView === 'starred'
-                      ? 'No starred files yet.'
-                      : 'The file storage is empty.'
-                }
-                emptyDescription={
-                  activeView === 'media'
-                    ? 'Load images or videos to see them here.'
-                    : activeView === 'starred'
-                      ? 'Star files to quickly find them later.'
-                      : 'Get started by adding files from your Google Drive.'
-                }
-                emptyButtonLabel={activeView === 'starred' ? 'Add Files' : 'Add Your First File'}
-                hideEmptyButton={activeView === 'media' || activeView === 'starred'}
+                activeView={activeView}
               />
             </>
           )}

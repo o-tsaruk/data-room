@@ -41,16 +41,51 @@ import {
 import { File } from '@/src/types';
 import { formatTimestampUTC } from '../utils/common';
 
+type ActiveView = 'files' | 'recent' | 'starred' | 'media' | 'settings';
+
+const EMPTY_STATE_TEXT: Record<
+  ActiveView,
+  { title: string; description: string; buttonLabel: string; showButton: boolean }
+> = {
+  files: {
+    title: 'The file storage is empty.',
+    description: 'Get started by adding files from your Google Drive.',
+    buttonLabel: 'Add Your First File',
+    showButton: true,
+  },
+  recent: {
+    title: 'The file storage is empty.',
+    description: 'Get started by adding files from your Google Drive.',
+    buttonLabel: 'Add Your First File',
+    showButton: true,
+  },
+  starred: {
+    title: 'No starred files yet.',
+    description: 'Star files to quickly find them later.',
+    buttonLabel: 'Add Files',
+    showButton: false,
+  },
+  media: {
+    title: 'The media storage is empty.',
+    description: 'Load images or videos to see them here.',
+    buttonLabel: 'Add Your First File',
+    showButton: false,
+  },
+  settings: {
+    title: 'The file storage is empty.',
+    description: 'Get started by adding files from your Google Drive.',
+    buttonLabel: 'Add Your First File',
+    showButton: true,
+  },
+};
+
 interface FileListProps {
   files: File[];
   onOpen: () => void;
   onRemove: (fileId: string) => void;
   onToggleStar?: (fileId: string, starred: boolean) => void;
   searchTerm?: string;
-  emptyTitle?: string;
-  emptyDescription?: string;
-  emptyButtonLabel?: string;
-  hideEmptyButton?: boolean;
+  activeView: ActiveView;
 }
 
 export default function FileList({
@@ -59,16 +94,9 @@ export default function FileList({
   onRemove,
   onToggleStar,
   searchTerm,
-  emptyTitle,
-  emptyDescription,
-  emptyButtonLabel,
-  hideEmptyButton,
+  activeView,
 }: FileListProps) {
-  const resolvedEmptyTitle = emptyTitle ?? 'The file storage is empty.';
-  const resolvedEmptyDescription =
-    emptyDescription ?? 'Get started by adding files from your Google Drive.';
-  const resolvedEmptyButton = emptyButtonLabel ?? 'Add Your First File';
-  const showEmptyButton = !hideEmptyButton;
+  const emptyState = EMPTY_STATE_TEXT[activeView];
   const prettyType = (mime?: string) => {
     if (!mime) return 'unknown';
     if (mime.startsWith('image/')) return 'image';
@@ -227,13 +255,13 @@ export default function FileList({
         <EmptyMedia variant='default'>
           <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
         </EmptyMedia>
-        <EmptyTitle>{resolvedEmptyTitle}</EmptyTitle>
-        <EmptyDescription>{resolvedEmptyDescription}</EmptyDescription>
+        <EmptyTitle>{emptyState.title}</EmptyTitle>
+        <EmptyDescription>{emptyState.description}</EmptyDescription>
       </EmptyHeader>
-      {showEmptyButton && (
+      {emptyState.showButton && (
         <EmptyContent>
           <Button onClick={onOpen}>
-            <Plus className='mr-2 h-4 w-4' /> {resolvedEmptyButton}
+            <Plus className='mr-2 h-4 w-4' /> {emptyState.buttonLabel}
           </Button>
         </EmptyContent>
       )}

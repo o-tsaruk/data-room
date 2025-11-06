@@ -1,7 +1,8 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { Suspense, useEffect, useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field';
@@ -9,12 +10,24 @@ import { Input } from '@/components/ui/input';
 import { AuthErrorDialog } from '@/src/components/AuthErrorDialog';
 
 export default function LoginPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.push('/dashboard');
+    }
+  }, [status, router]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     await signIn('email', { email, callbackUrl: '/dashboard' });
   };
+
+  if (status === 'loading' || status === 'authenticated') {
+    return null;
+  }
 
   return (
     <div className='flex min-h-screen items-center justify-center bg-muted/30'>
