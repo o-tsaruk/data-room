@@ -19,8 +19,20 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Folder as FolderIcon,
+  ChevronRight,
 } from 'lucide-react';
 import Image from 'next/image';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -30,6 +42,8 @@ import {
   EmptyTitle,
   EmptyContent,
 } from '@/components/ui/empty';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import {
   Table,
   TableBody,
@@ -38,10 +52,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { File } from '@/src/types';
+import { File, Folder } from '@/src/types';
 import { formatTimestampUTC } from '../utils/common';
 
 type ActiveView = 'files' | 'recent' | 'starred' | 'media' | 'settings';
+
+type FolderWithChildren = Folder & { children: FolderWithChildren[] };
 
 const EMPTY_STATE_TEXT: Record<
   ActiveView,
@@ -81,20 +97,28 @@ const EMPTY_STATE_TEXT: Record<
 
 interface FileListProps {
   files: File[];
+  folders?: Folder[];
   onOpen: () => void;
   onRemove: (fileId: string) => void;
+  onFolderClick?: (folderId: string | null) => void;
+  onDeleteFolder?: (folderId: string) => void;
   onToggleStar?: (fileId: string, starred: boolean) => void;
   searchTerm?: string;
   activeView: ActiveView;
+  isLoading?: boolean;
 }
 
 export default function FileList({
   files,
+  folders = [],
   onOpen,
   onRemove,
+  onFolderClick,
+  onDeleteFolder,
   onToggleStar,
   searchTerm,
   activeView,
+  isLoading = false,
 }: FileListProps) {
   const emptyState = EMPTY_STATE_TEXT[activeView];
   const prettyType = (mime?: string) => {
@@ -106,6 +130,10 @@ export default function FileList({
     if (mime === 'application/vnd.google-apps.document') return 'document';
     if (mime === 'application/vnd.google-apps.spreadsheet') return 'spreadsheet';
     if (mime === 'application/vnd.google-apps.presentation') return 'presentation';
+
+    if (mime.includes('wordprocessingml.document') || mime.includes('msword')) return 'document';
+    if (mime.includes('spreadsheetml') || mime.includes('ms-excel')) return 'spreadsheet';
+    if (mime.includes('presentationml') || mime.includes('ms-powerpoint')) return 'presentation';
     const parts = mime.split('/');
     return parts[1] || parts[0];
   };
@@ -199,19 +227,33 @@ export default function FileList({
       enableSorting: false,
     },
     {
-      id: 'actions',
+      id: 'view',
+      header: '',
       enableHiding: false,
       enableSorting: false,
       cell: ({ row }) => {
         const file = row.original;
         return (
-          <div className='flex items-center gap-2'>
+          <div className='flex items-center'>
             <Button variant='ghost' size='sm' asChild className='h-8'>
               <a href={file.url} target='_blank' rel='noopener noreferrer'>
                 <ExternalLink className='h-4 w-4 mr-1' />
                 View
               </a>
             </Button>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'delete',
+      header: '',
+      enableHiding: false,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const file = row.original;
+        return (
+          <div className='flex items-center'>
             <Button
               variant='ghost'
               size='sm'
@@ -260,20 +302,178 @@ export default function FileList({
       </EmptyHeader>
       {emptyState.showButton && (
         <EmptyContent>
-          <Button onClick={onOpen}>
-            <Plus className='mr-2 h-4 w-4' /> {emptyState.buttonLabel}
-          </Button>
+          <Button onClick={onOpen}>{emptyState.buttonLabel}</Button>
         </EmptyContent>
       )}
     </Empty>
   );
 
-  if (files.length === 0) {
+  const folderTree = React.useMemo(() => {
+    const folderMap = new Map<string, FolderWithChildren>();
+    const rootFolders: FolderWithChildren[] = [];
+
+    folders.forEach((folder) => {
+      folderMap.set(folder.id, { ...folder, children: [] });
+    });
+
+    folders.forEach((folder) => {
+      const folderWithChildren = folderMap.get(folder.id)!;
+      if (!folder.parentFolderId) {
+        rootFolders.push(folderWithChildren);
+      } else {
+        const parent = folderMap.get(folder.parentFolderId);
+        if (parent) {
+          parent.children.push(folderWithChildren);
+        } else {
+          rootFolders.push(folderWithChildren);
+        }
+      }
+    });
+
+    return rootFolders;
+  }, [folders]);
+
+  const filteredFolderTree = React.useMemo(() => {
+    if (!searchTerm || !searchTerm.trim()) return folderTree;
+    const term = searchTerm.trim().toLowerCase();
+
+    const filterTree = (nodes: FolderWithChildren[]): FolderWithChildren[] => {
+      return nodes
+        .map((node) => {
+          const matches = node.name.toLowerCase().includes(term);
+          const filteredChildren = filterTree(node.children);
+
+          if (matches || filteredChildren.length > 0) {
+            return { ...node, children: filteredChildren };
+          }
+          return null;
+        })
+        .filter((node): node is FolderWithChildren => node !== null);
+    };
+
+    return filterTree(folderTree);
+  }, [folderTree, searchTerm]);
+
+  const filteredFiles = table.getRowModel().rows;
+
+  const [openFolders, setOpenFolders] = React.useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [folderToDelete, setFolderToDelete] = React.useState<string | null>(null);
+
+  const toggleFolder = (folderId: string) => {
+    setOpenFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteClick = (folderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFolderToDelete(folderId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (folderToDelete) {
+      onDeleteFolder?.(folderToDelete);
+      setDeleteDialogOpen(false);
+      setFolderToDelete(null);
+    }
+  };
+
+  const renderFolderRow = (folder: FolderWithChildren, depth: number = 0) => {
+    const hasChildren = folder.children.length > 0;
+    const isOpen = openFolders.has(folder.id);
+    const indent = depth > 0 ? depth * 24 : 0;
+
+    return (
+      <React.Fragment key={`folder-${folder.id}`}>
+        <TableRow className='hover:bg-gray-50'>
+          <TableCell>
+            <div className='w-8'></div>
+          </TableCell>
+          <TableCell>
+            <div
+              className='flex items-center gap-2 max-w-[400px]'
+              style={{ paddingLeft: indent > 0 ? `${indent}px` : undefined }}
+            >
+              {hasChildren ? (
+                <button
+                  className='flex items-center gap-1 hover:bg-gray-100 rounded p-1 -ml-1'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFolder(folder.id);
+                  }}
+                >
+                  <ChevronRight
+                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${
+                      isOpen ? 'rotate-90' : ''
+                    }`}
+                  />
+                </button>
+              ) : null}
+              <div
+                className='flex items-center gap-2 flex-1 cursor-pointer'
+                onClick={() => onFolderClick?.(folder.id)}
+              >
+                <FolderIcon className='h-4 w-4 text-blue-500 shrink-0' />
+                <span className='font-medium text-gray-800 truncate'>{folder.name}</span>
+              </div>
+            </div>
+          </TableCell>
+          <TableCell>
+            <div></div>
+          </TableCell>
+          <TableCell>
+            <div className='text-gray-600 capitalize'>folder</div>
+          </TableCell>
+          <TableCell>
+            <div></div>
+          </TableCell>
+          <TableCell>
+            <div className='flex items-center'>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={(e) => handleDeleteClick(folder.id, e)}
+                className='h-8 text-red-600 hover:text-red-800'
+              >
+                <Trash2 className='h-4 w-4' />
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+        {hasChildren && isOpen && (
+          <>{folder.children.map((child) => renderFolderRow(child, depth + 1))}</>
+        )}
+      </React.Fragment>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className='bg-white rounded-lg shadow-lg p-4 min-h-[70vh]'>
+        <div className='flex items-center justify-center h-[50vh]'>
+          <div className='flex flex-col items-center gap-4'>
+            <Spinner className='h-8 w-8' />
+            <p className='text-gray-600'>Loading files...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (files.length === 0 && folders.length === 0) {
     return <EmptyFileList />;
   }
 
   return (
-    <div className='bg-white rounded-lg shadow-lg p-4 min-h-[70vh]'>
+    <div>
       <div className='overflow-hidden rounded-md border'>
         <Table>
           <TableHeader>
@@ -291,8 +491,9 @@ export default function FileList({
           </TableHeader>
 
           <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+            {filteredFolderTree.map((folder) => renderFolderRow(folder))}
+            {filteredFiles.length > 0 ? (
+              filteredFiles.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -301,16 +502,36 @@ export default function FileList({
                   ))}
                 </TableRow>
               ))
-            ) : (
+            ) : filteredFolderTree.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className='h-24 text-center'>
                   No results.
                 </TableCell>
               </TableRow>
-            )}
+            ) : null}
           </TableBody>
         </Table>
       </div>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Folder</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this folder and all its contents? This action cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className='bg-red-600 hover:bg-red-700'
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

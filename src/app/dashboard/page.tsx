@@ -1,18 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/src/components/AppSidebar';
+import DashboardHeader from '@/src/components/DashboardHeader';
 import DuplicateResolver from '@/src/components/DuplicateResolver';
 import FileList from '@/src/components/FileList';
-import LogoutButton from '@/src/components/LogoutButton';
-import Settings from '@/src/components/Settings';
-import Sidebar from '@/src/components/Sidebar';
-import { File } from '@/src/types';
+import { File, Folder } from '@/src/types';
 import { formatTimestampUTC } from '@/src/utils/common';
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
@@ -29,18 +28,19 @@ declare global {
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isPickerReady, setIsPickerReady] = useState(false);
   const [isGisReady, setIsGisReady] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const tokenClientRef = useRef<any>(null);
-  const [activeView, setActiveView] = useState<
-    'files' | 'recent' | 'starred' | 'media' | 'settings'
-  >('files');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [conflicts, setConflicts] = useState<File[] | null>(null);
   const [nonConflicting, setNonConflicting] = useState<File[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
 
   const SCOPES = 'https://www.googleapis.com/auth/drive.readonly openid email profile';
 
@@ -86,18 +86,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const onHashChange = () => {
-      const key = window.location.hash.replace('#', '') as typeof activeView;
-      if (['files', 'recent', 'starred', 'media', 'settings'].includes(key)) {
-        setActiveView(key);
-      } else {
-        setActiveView('files');
-      }
-    };
-    onHashChange();
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
+    const folderId = searchParams.get('folder');
+    const newFolderId = folderId || null;
+
+    if (newFolderId !== selectedFolderId) {
+      setSelectedFolderId(newFolderId);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const loadSession = async () => {
@@ -111,22 +106,46 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchUserFilesFromDB()
-      .then(() => {})
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []);
+    setIsLoadingFiles(true);
+
+    const fetchData = async () => {
+      try {
+        const url = selectedFolderId
+          ? `/api/files?folderId=${selectedFolderId}`
+          : '/api/files?folderId=';
+        const res = await fetch(url, { method: 'GET' });
+
+        if (!res.ok) throw new Error('Failed to fetch files from DB');
+        const data: { files: File[]; folders: Folder[] } = await res.json();
+        setSelectedFiles(data.files ?? []);
+        setFolders(data.folders ?? []);
+      } catch (err) {
+        console.error('[Dashboard] Error loading files from DB:', err);
+      } finally {
+        setIsLoadingFiles(false);
+        if (!selectedFolderId) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+  }, [selectedFolderId]);
 
   const fetchUserFilesFromDB = async () => {
     try {
-      const res = await fetch('/api/files', { method: 'GET' });
+      const url = selectedFolderId
+        ? `/api/files?folderId=${selectedFolderId}`
+        : '/api/files?folderId=';
+      const res = await fetch(url, { method: 'GET' });
 
       if (!res.ok) throw new Error('Failed to fetch files from DB');
-      const data: { files: File[] } = await res.json();
+      const data: { files: File[]; folders: Folder[] } = await res.json();
+
       setSelectedFiles(data.files ?? []);
+      setFolders(data.folders ?? []);
     } catch (err) {
-      console.error('Error loading files from DB:', err);
+      console.error('[Dashboard] Error loading files from DB:', err);
     }
   };
 
@@ -221,7 +240,6 @@ export default function Home() {
           if (maybeToken) {
             token = maybeToken;
             setAccessToken(token);
-            console.log('Got Google token from session');
           }
         }
       } catch (err) {
@@ -230,7 +248,6 @@ export default function Home() {
     }
 
     if (!token) {
-      console.log('No stored token, requesting new access token...');
       tokenClientRef.current.callback = async (response: any) => {
         if (response.error !== undefined) {
           console.error('Error getting access token:', response.error);
@@ -254,7 +271,7 @@ export default function Home() {
       const res = await fetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files }),
+        body: JSON.stringify({ files, folderId: selectedFolderId }),
       });
 
       if (!res.ok) throw new Error('Failed to store files');
@@ -266,24 +283,37 @@ export default function Home() {
     }
   };
 
-  const filteredFiles = () => {
-    if (activeView === 'recent') {
-      return [...selectedFiles].slice(0, 5);
+  const handleFolderClick = (folderId: string | null) => {
+    setSelectedFolderId(folderId);
+    const url = folderId ? `/dashboard?folder=${folderId}` : '/dashboard';
+    window.history.pushState({}, '', url);
+    // fetchUserFilesFromDB will be called by useEffect when selectedFolderId changes
+  };
+
+  const handleDeleteFolder = async (folderId: string) => {
+    try {
+      const res = await fetch(`/api/folders?folderId=${folderId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        console.error('Failed to delete folder:', data.error || res.statusText);
+        toast.error('Failed to delete folder.');
+        return;
+      }
+      toast.success('Folder deleted successfully.');
+      await fetchUserFilesFromDB();
+      // Dispatch event to refresh sidebar
+      window.dispatchEvent(new CustomEvent('folderDeleted'));
+
+      if (selectedFolderId === folderId) {
+        handleFolderClick(null);
+      }
+    } catch (e) {
+      console.error('Delete folder error:', e);
+      toast.error('Failed to delete folder.');
     }
-    if (activeView === 'starred') {
-      // Starred is server-provided property; if absent, treat as false
-      return selectedFiles.filter((f: any) => f.starred === true);
-    }
-    if (activeView === 'media') {
-      return selectedFiles.filter(
-        (f) => f.mimeType?.startsWith('image/') || f.mimeType?.startsWith('video/'),
-      );
-    }
-    return selectedFiles;
   };
 
   const handleToggleStar = async (fileId: string, starred: boolean) => {
-    // Optimistic update to avoid re-sorting jump
     const prev = selectedFiles;
     setSelectedFiles((curr) => curr.map((f) => (f.id === fileId ? { ...f, starred } : f)));
     try {
@@ -300,35 +330,6 @@ export default function Home() {
     } catch (e) {
       console.error('Star toggle error:', e);
       setSelectedFiles(prev);
-    }
-  };
-
-  const handleDeleteAllFiles = async () => {
-    try {
-      const res = await fetch('/api/files?all=true', { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        console.error('Failed to delete all files:', data.error || res.statusText);
-        return;
-      }
-      toast.success('All files deleted.');
-      await fetchUserFilesFromDB();
-    } catch (e) {
-      console.error('Delete all files error:', e);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    try {
-      const res = await fetch('/api/account', { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        console.error('Failed to delete account:', data.error || res.statusText);
-        return;
-      }
-      await signOut({ callbackUrl: '/login' });
-    } catch (e) {
-      console.error('Delete account error:', e);
     }
   };
 
@@ -357,49 +358,30 @@ export default function Home() {
   }
 
   return (
-    <div className='min-h-screen bg-gray-50 text-gray-800 flex'>
-      <Sidebar />
-      <div className='flex-1'>
-        <header className='sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 py-4'>
-          <div className='max-w-6xl mx-auto flex items-center justify-between'>
-            <h1 className='text-2xl capitalize'>{activeView}</h1>
-            <div className='flex items-center gap-3'>
-              {session?.user?.email && (
-                <span className='text-sm text-gray-600 hidden sm:inline'>{session.user.email}</span>
-              )}
-              <LogoutButton />
-            </div>
-          </div>
-        </header>
-        <main className='max-w-6xl mx-auto px-6 py-10'>
-          {!isLoading && activeView !== 'settings' && (
+    <SidebarProvider>
+      <AppSidebar onOpenPicker={handleOpenPicker} />
+      <SidebarInset>
+        <DashboardHeader
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          disabled={selectedFiles.length === 0 && folders.length === 0}
+        />
+        <main className='w-full px-6 py-10'>
+          {!isLoading && (
             <>
-              <div className='w-full mb-4'>
-                <Input
-                  placeholder='Search file'
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSearchTerm(e.target.value)
-                  }
-                  className='w-full bg-white border border-gray-200 shadow-sm'
-                  disabled={filteredFiles().length === 0}
-                />
-              </div>
               <FileList
-                files={filteredFiles()}
+                files={selectedFiles}
+                folders={folders}
                 onOpen={handleOpenPicker}
                 onRemove={handleRemoveFile}
+                onFolderClick={handleFolderClick}
+                onDeleteFolder={handleDeleteFolder}
                 searchTerm={searchTerm}
                 onToggleStar={handleToggleStar}
-                activeView={activeView}
+                activeView='files'
+                isLoading={isLoadingFiles}
               />
             </>
-          )}
-          {!isLoading && activeView === 'settings' && (
-            <Settings
-              onDeleteAllFiles={handleDeleteAllFiles}
-              onDeleteAccount={handleDeleteAccount}
-            />
           )}
           {conflicts && conflicts.length > 0 && (
             <DuplicateResolver
@@ -420,14 +402,12 @@ export default function Home() {
             />
           )}
         </main>
-        {activeView !== 'settings' && (
-          <div className='fixed bottom-6 right-6 z-20'>
-            <Button onClick={handleOpenPicker} className='h-12 px-5 text-sm'>
-              <Plus className='h-8 w-8' /> Upload New File
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
+        <div className='fixed bottom-6 right-6 z-20'>
+          <Button onClick={handleOpenPicker} className='h-12 px-5 text-sm'>
+            Upload New File
+          </Button>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

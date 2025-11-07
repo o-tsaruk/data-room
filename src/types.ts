@@ -13,4 +13,12 @@ export interface File {
   lastEditedDate: string;
   mimeType: string;
   starred?: boolean;
+  folderId?: string | null;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  parentFolderId?: string | null;
+  createdAt?: string;
 }
