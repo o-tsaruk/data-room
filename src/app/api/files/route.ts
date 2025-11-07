@@ -11,17 +11,43 @@ export async function GET(req: Request) {
   try {
     const session = await serverSession();
     const email = session?.user?.email;
-    if (!email) return NextResponse.json({ files: [] });
+    if (!email) return NextResponse.json({ files: [], folders: [] });
 
-    const { data: files, error } = await supabase
-      .from('files')
-      .select('*')
-      .eq('user_email', email)
-      .order('uploaded_at', { ascending: false });
+    const { searchParams } = new URL(req.url);
+    const folderId = searchParams.get('folderId');
 
-    if (error) {
-      console.error('Error fetching files:', error);
-      return NextResponse.json({ files: [] });
+    let filesQuery = supabase.from('files').select('*').eq('user_email', email);
+
+    if (folderId === null || folderId === '') {
+      filesQuery = filesQuery.is('folder_id', null);
+    } else if (folderId) {
+      filesQuery = filesQuery.eq('folder_id', folderId);
+    }
+
+    const { data: files, error: filesError } = await filesQuery.order('uploaded_at', {
+      ascending: false,
+    });
+
+    if (filesError) {
+      console.error('Error fetching files:', filesError);
+      return NextResponse.json({ files: [], folders: [] });
+    }
+
+    // Fetch folders in the current folder
+    let foldersQuery = supabase.from('folders').select('*').eq('user_email', email);
+
+    if (folderId === null || folderId === '') {
+      foldersQuery = foldersQuery.is('parent_folder_id', null);
+    } else if (folderId) {
+      foldersQuery = foldersQuery.eq('parent_folder_id', folderId);
+    }
+
+    const { data: folders, error: foldersError } = await foldersQuery.order('created_at', {
+      ascending: true,
+    });
+
+    if (foldersError) {
+      console.error('Error fetching folders:', foldersError);
     }
 
     const camelFiles = (files ?? []).map((f: any) => ({
@@ -33,12 +59,20 @@ export async function GET(req: Request) {
       starred: f.starred,
       lastEditedDate: f.last_edited,
       uploadedAt: f.uploaded_at,
+      folderId: f.folder_id,
     }));
 
-    return NextResponse.json({ files: camelFiles });
+    const camelFolders = (folders ?? []).map((f: any) => ({
+      id: f.id,
+      name: f.name,
+      parentFolderId: f.parent_folder_id,
+      createdAt: f.created_at,
+    }));
+
+    return NextResponse.json({ files: camelFiles, folders: camelFolders });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ files: [] });
+    return NextResponse.json({ files: [], folders: [] });
   }
 }
 
@@ -48,7 +82,7 @@ export async function POST(req: Request) {
     const email = session?.user?.email;
     if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-    const { files } = await req.json();
+    const { files, folderId } = await req.json();
 
     const newFiles = (files ?? []).map((f: any) => ({
       user_email: email,
@@ -56,6 +90,7 @@ export async function POST(req: Request) {
       url: f.url,
       icon_url: f.iconUrl,
       mime_type: f.mimeType,
+      folder_id: folderId || null,
     }));
 
     if (newFiles.length === 0) return NextResponse.json({ success: true });

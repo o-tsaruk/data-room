@@ -1,0 +1,112 @@
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+import { serverSession } from '@/src/auth';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+);
+
+export interface Folder {
+  id: string;
+  user_email: string;
+  name: string;
+  parent_folder_id: string | null;
+  created_at: string;
+}
+
+export async function GET(req: Request) {
+  try {
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ folders: [] });
+
+    const { data: folders, error } = await supabase
+      .from('folders')
+      .select('*')
+      .eq('user_email', email)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching folders:', error);
+      return NextResponse.json({ folders: [] });
+    }
+
+    return NextResponse.json({ folders: folders ?? [] });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ folders: [] });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    const { name, parent_folder_id } = await req.json();
+    if (!name) {
+      return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
+    }
+
+    const { data: folder, error } = await supabase
+      .from('folders')
+      .insert({
+        user_email: email,
+        name,
+        parent_folder_id: parent_folder_id || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating folder:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ folder });
+  } catch (error: any) {
+    console.error('Error creating folder:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+async function deleteFolderRecursive(folderId: string, email: string): Promise<void> {
+  const { data: childFolders } = await supabase
+    .from('folders')
+    .select('id')
+    .eq('parent_folder_id', folderId)
+    .eq('user_email', email);
+
+  if (childFolders) {
+    for (const child of childFolders) {
+      await deleteFolderRecursive(child.id, email);
+    }
+  }
+
+  await supabase.from('files').delete().eq('folder_id', folderId).eq('user_email', email);
+  await supabase.from('folders').delete().eq('parent_folder_id', folderId).eq('user_email', email);
+  await supabase.from('folders').delete().eq('id', folderId).eq('user_email', email);
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const folderId = searchParams.get('folderId');
+    if (!folderId) {
+      return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
+    }
+
+    await deleteFolderRecursive(folderId, email);
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting folder:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
