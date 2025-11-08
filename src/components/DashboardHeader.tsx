@@ -23,11 +23,7 @@ interface DashboardHeaderProps {
   disabled?: boolean;
 }
 
-export default function DashboardHeader({
-  searchTerm,
-  onSearchChange,
-  disabled = false,
-}: DashboardHeaderProps) {
+export default function DashboardHeader({ searchTerm, onSearchChange }: DashboardHeaderProps) {
   const { data: session } = useSession();
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [isDeletingFiles, setIsDeletingFiles] = useState(false);
@@ -118,7 +114,6 @@ export default function DashboardHeader({
               value={searchTerm}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
               className='w-full bg-white border border-gray-200 shadow-sm'
-              disabled={disabled}
             />
           </div>
           {session?.user?.email && (
