@@ -55,7 +55,7 @@ import {
 import { File, Folder } from '@/src/types';
 import { formatTimestampUTC } from '../utils/common';
 
-type ActiveView = 'files' | 'recent' | 'starred' | 'media' | 'settings';
+type ActiveView = 'files' | 'starred';
 
 type FolderWithChildren = Folder & { children: FolderWithChildren[] };
 
@@ -69,29 +69,11 @@ const EMPTY_STATE_TEXT: Record<
     buttonLabel: 'Add Your First File',
     showButton: true,
   },
-  recent: {
-    title: 'The file storage is empty.',
-    description: 'Get started by adding files from your Google Drive.',
-    buttonLabel: 'Add Your First File',
-    showButton: true,
-  },
   starred: {
     title: 'No starred files yet.',
     description: 'Star files to quickly find them later.',
     buttonLabel: 'Add Files',
     showButton: false,
-  },
-  media: {
-    title: 'The media storage is empty.',
-    description: 'Load images or videos to see them here.',
-    buttonLabel: 'Add Your First File',
-    showButton: false,
-  },
-  settings: {
-    title: 'The file storage is empty.',
-    description: 'Get started by adding files from your Google Drive.',
-    buttonLabel: 'Add Your First File',
-    showButton: true,
   },
 };
 
@@ -106,6 +88,7 @@ interface FileListProps {
   searchTerm?: string;
   activeView: ActiveView;
   isLoading?: boolean;
+  currentFolderName?: string | null;
 }
 
 export default function FileList({
@@ -119,8 +102,19 @@ export default function FileList({
   searchTerm,
   activeView,
   isLoading = false,
+  currentFolderName,
 }: FileListProps) {
   const emptyState = EMPTY_STATE_TEXT[activeView];
+
+  const getEmptyStateTitle = () => {
+    if (activeView === 'starred') {
+      return emptyState.title;
+    }
+    if (currentFolderName) {
+      return `${currentFolderName} folder is empty.`;
+    }
+    return emptyState.title;
+  };
   const prettyType = (mime?: string) => {
     if (!mime) return 'unknown';
     if (mime.startsWith('image/')) return 'image';
@@ -297,7 +291,7 @@ export default function FileList({
         <EmptyMedia variant='default'>
           <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
         </EmptyMedia>
-        <EmptyTitle>{emptyState.title}</EmptyTitle>
+        <EmptyTitle>{getEmptyStateTitle()}</EmptyTitle>
         <EmptyDescription>{emptyState.description}</EmptyDescription>
       </EmptyHeader>
       {emptyState.showButton && (

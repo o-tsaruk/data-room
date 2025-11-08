@@ -16,18 +16,27 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 interface SettingsProps {
-  onDeleteAllFiles: () => Promise<void> | void;
+  onDeleteAllFiles: () => Promise<boolean> | boolean | Promise<void> | void;
   onDeleteAccount: () => Promise<void> | void;
+  isDeletingFiles?: boolean;
+  onDeleteFilesComplete?: () => void;
 }
 
-export default function Settings({ onDeleteAllFiles, onDeleteAccount }: SettingsProps) {
+export default function Settings({
+  onDeleteAllFiles,
+  onDeleteAccount,
+  isDeletingFiles = false,
+  onDeleteFilesComplete,
+}: SettingsProps) {
   const [user, setUser] = useState<{
     name?: string | null;
     email?: string | null;
     image?: string | null;
   }>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -87,21 +96,39 @@ export default function Settings({ onDeleteAllFiles, onDeleteAccount }: Settings
                 You will delete all stored file records in Data Room, but your files remain in
                 Google Drive.
               </div>
-              <AlertDialog>
+              <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogTrigger asChild>
-                  <Button variant='destructive'>Delete All Files</Button>
+                  <Button variant='destructive' disabled={isDeletingFiles}>
+                    Delete All Files
+                  </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Are you sure you want to delete all files?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will remove all saved file records from Data Room. Your files on Google
-                      Drive will not be affected.
+                      This will remove all saved file records and folders from Data Room. Your files
+                      on Google Drive will not be affected.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={onDeleteAllFiles}>Continue</AlertDialogAction>
+                    <AlertDialogCancel disabled={isDeletingFiles}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        setDeleteDialogOpen(false);
+                        onDeleteFilesComplete?.();
+                        await onDeleteAllFiles();
+                      }}
+                      disabled={isDeletingFiles}
+                    >
+                      {isDeletingFiles ? (
+                        <>
+                          <Spinner className='mr-2 h-4 w-4' />
+                          Deleting...
+                        </>
+                      ) : (
+                        'Continue'
+                      )}
+                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>

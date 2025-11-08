@@ -50,12 +50,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
+    let validParentFolderId: string | null = null;
+    if (parent_folder_id) {
+      const { data: parentFolder, error: parentError } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('id', parent_folder_id)
+        .eq('user_email', email)
+        .single();
+
+      if (parentError || !parentFolder) {
+        console.warn(
+          `Parent folder ${parent_folder_id} not found for user ${email}, creating folder in root`,
+        );
+        validParentFolderId = null;
+      } else {
+        validParentFolderId = parent_folder_id;
+      }
+    }
+
     const { data: folder, error } = await supabase
       .from('folders')
       .insert({
         user_email: email,
         name,
-        parent_folder_id: parent_folder_id || null,
+        parent_folder_id: validParentFolderId,
       })
       .select()
       .single();

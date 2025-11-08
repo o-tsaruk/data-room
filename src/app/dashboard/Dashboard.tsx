@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { signOut, useSession } from 'next-auth/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,12 +24,13 @@ declare global {
   }
 }
 
-export function DashboardContent() {
+export function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [rootFiles, setRootFiles] = useState<File[]>([]); 
   const [isPickerReady, setIsPickerReady] = useState(false);
   const [isGisReady, setIsGisReady] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -38,8 +39,10 @@ export function DashboardContent() {
   const [conflicts, setConflicts] = useState<File[] | null>(null);
   const [nonConflicting, setNonConflicting] = useState<File[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [isStarredView, setIsStarredView] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [currentFolderName, setCurrentFolderName] = useState<string | null>(null);
 
   const SCOPES = 'https://www.googleapis.com/auth/drive.readonly openid email profile';
 
@@ -84,10 +87,16 @@ export function DashboardContent() {
 
   useEffect(() => {
     const folderId = searchParams.get('folder');
+    const starred = searchParams.get('starred') === 'true';
     const newFolderId = folderId || null;
 
-    if (newFolderId !== selectedFolderId) {
+    setIsStarredView(starred);
+    // Only update selectedFolderId if not in starred view
+    if (!starred && newFolderId !== selectedFolderId) {
       setSelectedFolderId(newFolderId);
+    } else if (starred && selectedFolderId !== null) {
+      // Clear folder selection when switching to starred view
+      setSelectedFolderId(null);
     }
   }, [searchParams]);
 
@@ -107,6 +116,76 @@ export function DashboardContent() {
 
     const fetchData = async () => {
       try {
+        if (isStarredView) {
+          const res = await fetch('/api/files?starred=true', { method: 'GET' });
+          if (!res.ok) throw new Error('Failed to fetch starred files from DB');
+          const data: { files: File[] } = await res.json();
+          setSelectedFiles(data.files ?? []);
+          setFolders([]);
+          setCurrentFolderName(null);
+
+          const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+          if (rootRes.ok) {
+            const rootData: { files: File[] } = await rootRes.json();
+            setRootFiles(rootData.files ?? []);
+          }
+        } else {
+          const url = selectedFolderId
+            ? `/api/files?folderId=${selectedFolderId}`
+            : '/api/files?folderId=';
+          const res = await fetch(url, { method: 'GET' });
+
+          if (!res.ok) throw new Error('Failed to fetch files from DB');
+          const data: { files: File[]; folders: Folder[] } = await res.json();
+          setSelectedFiles(data.files ?? []);
+          setFolders(data.folders ?? []);
+
+          if (selectedFolderId) {
+            const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+            if (rootRes.ok) {
+              const rootData: { files: File[] } = await rootRes.json();
+              setRootFiles(rootData.files ?? []);
+            }
+          } else {
+            setRootFiles(data.files ?? []);
+          }
+
+          if (selectedFolderId) {
+            const folder = data.folders?.find((f) => f.id === selectedFolderId);
+            setCurrentFolderName(folder?.name || null);
+          } else {
+            setCurrentFolderName(null);
+          }
+        }
+      } catch (err) {
+        console.error('[Dashboard] Error loading files from DB:', err);
+      } finally {
+        setIsLoadingFiles(false);
+        if (!selectedFolderId && !isStarredView) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+  }, [selectedFolderId, isStarredView]);
+
+  const fetchUserFilesFromDB = useCallback(async () => {
+    try {
+      if (isStarredView) {
+        const res = await fetch('/api/files?starred=true', { method: 'GET' });
+        if (!res.ok) throw new Error('Failed to fetch starred files from DB');
+        const data: { files: File[] } = await res.json();
+        setSelectedFiles(data.files ?? []);
+        setFolders([]);
+
+        // Always fetch root files for collision checking when in starred view
+        const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+        if (rootRes.ok) {
+          const rootData: { files: File[] } = await rootRes.json();
+          setRootFiles(rootData.files ?? []);
+        }
+      } else {
         const url = selectedFolderId
           ? `/api/files?folderId=${selectedFolderId}`
           : '/api/files?folderId=';
@@ -114,37 +193,42 @@ export function DashboardContent() {
 
         if (!res.ok) throw new Error('Failed to fetch files from DB');
         const data: { files: File[]; folders: Folder[] } = await res.json();
+
         setSelectedFiles(data.files ?? []);
         setFolders(data.folders ?? []);
-      } catch (err) {
-        console.error('[Dashboard] Error loading files from DB:', err);
-      } finally {
-        setIsLoadingFiles(false);
-        if (!selectedFolderId) {
-          setIsLoading(false);
+
+        if (selectedFolderId) {
+          const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+          if (rootRes.ok) {
+            const rootData: { files: File[] } = await rootRes.json();
+            setRootFiles(rootData.files ?? []);
+          }
+        } else {
+          setRootFiles(data.files ?? []);
+        }
+
+        if (selectedFolderId) {
+          const folder = data.folders?.find((f) => f.id === selectedFolderId);
+          setCurrentFolderName(folder?.name || null);
+        } else {
+          setCurrentFolderName(null);
         }
       }
-    };
-
-    fetchData();
-  }, [selectedFolderId]);
-
-  const fetchUserFilesFromDB = async () => {
-    try {
-      const url = selectedFolderId
-        ? `/api/files?folderId=${selectedFolderId}`
-        : '/api/files?folderId=';
-      const res = await fetch(url, { method: 'GET' });
-
-      if (!res.ok) throw new Error('Failed to fetch files from DB');
-      const data: { files: File[]; folders: Folder[] } = await res.json();
-
-      setSelectedFiles(data.files ?? []);
-      setFolders(data.folders ?? []);
     } catch (err) {
       console.error('[Dashboard] Error loading files from DB:', err);
     }
-  };
+  }, [selectedFolderId, isStarredView]);
+
+  useEffect(() => {
+    const handleAllFilesDeleted = () => {
+      setSelectedFiles([]);
+      setFolders([]);
+      setSelectedFolderId(null);
+      window.history.pushState({}, '', '/dashboard');
+    };
+    window.addEventListener('allFilesDeleted', handleAllFilesDeleted);
+    return () => window.removeEventListener('allFilesDeleted', handleAllFilesDeleted);
+  }, []);
 
   const initializePicker = async () => {
     try {
@@ -200,7 +284,8 @@ export function DashboardContent() {
         mimeType: doc[window.google.picker.Document.MIME_TYPE],
       }));
 
-      const existing = selectedFiles;
+      // When in starred view, check collisions against root files
+      const existing = isStarredView ? rootFiles : selectedFiles;
       const conflictsFound: File[] = [];
       const rest: File[] = [];
       for (const f of files) {
@@ -264,14 +349,23 @@ export function DashboardContent() {
 
   const storeFilesInDB = async (files: File[]) => {
     try {
+      const targetFolderId = isStarredView ? null : selectedFolderId;
+
       const res = await fetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files, folderId: selectedFolderId }),
+        body: JSON.stringify({ files, folderId: targetFolderId }),
       });
 
       if (!res.ok) throw new Error('Failed to store files');
       toast.success('Files saved successfully.');
+
+      // If in starred view, switch to root after adding
+      if (isStarredView) {
+        router.push('/dashboard');
+        setSelectedFolderId(null);
+        setIsStarredView(false);
+      }
 
       await fetchUserFilesFromDB();
     } catch (err) {
@@ -372,8 +466,9 @@ export function DashboardContent() {
                 onDeleteFolder={handleDeleteFolder}
                 searchTerm={searchTerm}
                 onToggleStar={handleToggleStar}
-                activeView='files'
+                activeView={isStarredView ? 'starred' : 'files'}
                 isLoading={isLoadingFiles}
+                currentFolderName={currentFolderName}
               />
             </>
           )}

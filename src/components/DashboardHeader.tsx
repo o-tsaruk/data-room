@@ -30,20 +30,33 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   const { data: session } = useSession();
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [isDeletingFiles, setIsDeletingFiles] = useState(false);
 
   const handleDeleteAllFiles = useCallback(async () => {
+    setIsDeletingFiles(true);
     try {
       const res = await fetch('/api/files?all=true', { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         console.error('Failed to delete all files:', data.error || res.statusText);
-        return;
+        toast.error('Failed to delete all files.');
+        setIsDeletingFiles(false);
+        return false;
       }
-      toast.success('All files deleted.');
+      toast.success('All files and folders deleted.');
+      window.dispatchEvent(new CustomEvent('allFilesDeleted'));
+      setIsDeletingFiles(false);
+      return true;
     } catch (e) {
       console.error('Delete all files error:', e);
       toast.error('Failed to delete all files.');
+      setIsDeletingFiles(false);
+      return false;
     }
+  }, []);
+
+  const handleDeleteFilesComplete = useCallback(() => {
+    setSettingsDialogOpen(false);
   }, []);
 
   const handleDeleteAccount = useCallback(async () => {
@@ -73,6 +86,8 @@ export default function DashboardHeader({
             <Settings
               onDeleteAllFiles={handleDeleteAllFiles}
               onDeleteAccount={handleDeleteAccount}
+              isDeletingFiles={isDeletingFiles}
+              onDeleteFilesComplete={handleDeleteFilesComplete}
             />
           </div>
         </DialogContent>

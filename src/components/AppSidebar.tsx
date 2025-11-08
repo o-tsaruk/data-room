@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Folder, ChevronRight } from 'lucide-react';
-import { signOut } from 'next-auth/react';
+import { Folder, ChevronRight, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
@@ -32,6 +31,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
+import { Spinner } from '@/components/ui/spinner';
 
 interface FolderData {
   id: string;
@@ -168,11 +168,16 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const currentFolderId = searchParams.get('folder');
+  const isStarred = searchParams.get('starred') === 'true';
   const isSettingsPage = pathname === '/settings';
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [folderNameError, setFolderNameError] = useState<string | null>(null);
+
+  const folderNameIsValid = /^[a-zA-Z0-9]+$/.test(folderName);
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -193,12 +198,17 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
     const handleFolderDeleted = () => {
       fetchFolders();
     };
+    const handleAllFilesDeleted = () => {
+      fetchFolders();
+    };
     window.addEventListener('folderDeleted', handleFolderDeleted);
+    window.addEventListener('allFilesDeleted', handleAllFilesDeleted);
 
     return () => {
       window.removeEventListener('folderDeleted', handleFolderDeleted);
+      window.removeEventListener('allFilesDeleted', handleAllFilesDeleted);
     };
-  }, []);
+  }, [fetchFolders]);
 
   const handleNewFolderClick = () => {
     setFolderName('');
@@ -208,13 +218,38 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
   const handleNewFolder = useCallback(async () => {
     if (!folderName || !folderName.trim()) return;
 
+    const folderNameIsValid = /^[a-zA-Z0-9]+$/.test(folderName);
+
+    if (!folderNameIsValid) {
+      setFolderNameError('Folder name must contain only letters and numbers.');
+      return;
+    }
+
+    setIsCreatingFolder(true);
+    setFolderNameError(null);
+
     try {
+      // If in starred view, create folder in root
+      const parentFolderId = isStarred ? null : currentFolderId || null;
+
+      const existingFolder = folders.find(
+        (f) => f.name === folderName.trim() && f.parent_folder_id === parentFolderId,
+      );
+
+      if (existingFolder) {
+        setFolderNameError(
+          'A folder with this name already exists at this level. Please choose a different name.',
+        );
+        setIsCreatingFolder(false);
+        return;
+      }
+
       const res = await fetch('/api/folders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: folderName.trim(),
-          parent_folder_id: currentFolderId || null,
+          parent_folder_id: parentFolderId,
         }),
       });
 
@@ -226,16 +261,29 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
       toast.success('Folder created successfully.');
       setNewFolderDialogOpen(false);
       setFolderName('');
+      setFolderNameError(null);
+
+      if (isStarred) {
+        router.push('/dashboard');
+      }
+
       await fetchFolders();
     } catch (err: any) {
       console.error('Error creating folder:', err);
-      toast.error(err.message || 'Failed to create folder.');
+      setFolderNameError(err.message || 'Failed to create folder.');
+    } finally {
+      setIsCreatingFolder(false);
     }
-  }, [folderName, currentFolderId, fetchFolders]);
+  }, [folderName, currentFolderId, fetchFolders, isStarred, router, folders]);
 
   const handleRootClick = (e: React.MouseEvent) => {
     e.preventDefault();
     router.push('/dashboard');
+  };
+
+  const handleStarredClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    router.push('/dashboard?starred=true');
   };
 
   // All folders with NULL parent are children of Root
@@ -259,7 +307,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
                 className='flex-1 cursor-pointer'
               >
                 <Folder className='h-4 w-4' />
-                <span>Root</span>
+                <span>All files</span>
               </SidebarMenuButton>
             </div>
             <CollapsibleContent>
@@ -269,7 +317,6 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
                     key={folder.id}
                     folder={folder}
                     allFolders={folders}
-                    isNested={true}
                     onRefresh={fetchFolders}
                   />
                 ))}
@@ -285,7 +332,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
         <SidebarMenuButton asChild isActive={!currentFolderId}>
           <a href='/dashboard' onClick={handleRootClick}>
             <Folder className='h-4 w-4' />
-            <span>Root</span>
+            <span>All files</span>
           </a>
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -300,27 +347,60 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
             <AlertDialogTitle>New Folder</AlertDialogTitle>
             <AlertDialogDescription>Enter a name for the new folder.</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className='py-4'>
+          <div className='pt-2 pb-4'>
             <Input
               placeholder='Folder name'
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && folderNameIsValid) {
                   handleNewFolder();
                 }
               }}
               autoFocus
             />
+            {!folderNameIsValid && folderName.length > 0 && (
+              <div className='text-xs text-red-600 mt-2'>
+                Folder name must contain only letters and numbers
+              </div>
+            )}
+            {folderNameError && <div className='text-xs text-red-600 mt-2'>{folderNameError}</div>}
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setFolderName('')}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleNewFolder}>Create</AlertDialogAction>
+            <AlertDialogCancel
+              onClick={() => {
+                setFolderName('');
+                setFolderNameError(null);
+              }}
+              disabled={isCreatingFolder}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleNewFolder}
+              disabled={!folderNameIsValid || isCreatingFolder}
+            >
+              {isCreatingFolder ? (
+                <>
+                  <Spinner className='mr-2 h-4 w-4' />
+                  Creating...
+                </>
+              ) : (
+                'Create'
+              )}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     ),
-    [newFolderDialogOpen, folderName, handleNewFolder],
+    [
+      newFolderDialogOpen,
+      folderName,
+      handleNewFolder,
+      folderNameIsValid,
+      folderNameError,
+      isCreatingFolder,
+    ],
   );
 
   return (
@@ -340,7 +420,12 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
           )}
           {onOpenPicker && (
             <Button
-              onClick={onOpenPicker}
+              onClick={() => {
+                if (isStarred) {
+                  router.push('/dashboard');
+                }
+                onOpenPicker();
+              }}
               className='w-full size-sm bg-black text-white hover:bg-gray-800'
             >
               New File
@@ -355,7 +440,21 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
                   <SidebarMenuButton disabled>Loading folders...</SidebarMenuButton>
                 </SidebarMenuItem>
               ) : (
-                <RootFolderItem />
+                <>
+                  <SidebarMenuItem className='border-b border-gray-100 pb-1 mb-1'>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isStarred}
+                      className={isStarred ? 'border border-black' : ''}
+                    >
+                      <a href='/dashboard?starred=true' onClick={handleStarredClick}>
+                        <Star className='h-4 w-4' />
+                        <span>Starred</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <RootFolderItem />
+                </>
               )}
             </SidebarMenu>
           </SidebarGroupContent>

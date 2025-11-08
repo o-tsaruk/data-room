@@ -15,10 +15,13 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const folderId = searchParams.get('folderId');
+    const starred = searchParams.get('starred') === 'true';
 
     let filesQuery = supabase.from('files').select('*').eq('user_email', email);
 
-    if (folderId === null || folderId === '') {
+    if (starred) {
+      filesQuery = filesQuery.eq('starred', true);
+    } else if (folderId === null || folderId === '') {
       filesQuery = filesQuery.is('folder_id', null);
     } else if (folderId) {
       filesQuery = filesQuery.eq('folder_id', folderId);
@@ -33,21 +36,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ files: [], folders: [] });
     }
 
-    // Fetch folders in the current folder
-    let foldersQuery = supabase.from('folders').select('*').eq('user_email', email);
+    // Fetch folders in the current folder (skip if starred view)
+    let folders: any[] = [];
+    if (!starred) {
+      let foldersQuery = supabase.from('folders').select('*').eq('user_email', email);
 
-    if (folderId === null || folderId === '') {
-      foldersQuery = foldersQuery.is('parent_folder_id', null);
-    } else if (folderId) {
-      foldersQuery = foldersQuery.eq('parent_folder_id', folderId);
-    }
+      if (folderId === null || folderId === '') {
+        foldersQuery = foldersQuery.is('parent_folder_id', null);
+      } else if (folderId) {
+        foldersQuery = foldersQuery.eq('parent_folder_id', folderId);
+      }
 
-    const { data: folders, error: foldersError } = await foldersQuery.order('created_at', {
-      ascending: true,
-    });
+      const { data: foldersData, error: foldersError } = await foldersQuery.order('created_at', {
+        ascending: true,
+      });
 
-    if (foldersError) {
-      console.error('Error fetching folders:', foldersError);
+      if (foldersError) {
+        console.error('Error fetching folders:', foldersError);
+      } else {
+        folders = foldersData ?? [];
+      }
     }
 
     const camelFiles = (files ?? []).map((f: any) => ({
@@ -62,7 +70,7 @@ export async function GET(req: Request) {
       folderId: f.folder_id,
     }));
 
-    const camelFolders = (folders ?? []).map((f: any) => ({
+    const camelFolders = folders.map((f: any) => ({
       id: f.id,
       name: f.name,
       parentFolderId: f.parent_folder_id,
@@ -84,13 +92,30 @@ export async function POST(req: Request) {
 
     const { files, folderId } = await req.json();
 
+    let validFolderId: string | null = null;
+    if (folderId) {
+      const { data: folder, error: folderError } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('id', folderId)
+        .eq('user_email', email)
+        .single();
+
+      if (folderError || !folder) {
+        console.warn(`Folder ${folderId} not found for user ${email}, saving files to root folder`);
+        validFolderId = null;
+      } else {
+        validFolderId = folderId;
+      }
+    }
+
     const newFiles = (files ?? []).map((f: any) => ({
       user_email: email,
       name: f.name,
       url: f.url,
       icon_url: f.iconUrl,
       mime_type: f.mimeType,
-      folder_id: folderId || null,
+      folder_id: validFolderId,
     }));
 
     if (newFiles.length === 0) return NextResponse.json({ success: true });
@@ -122,6 +147,16 @@ export async function DELETE(req: Request) {
     let error;
     if (deleteAll) {
       ({ error } = await supabase.from('files').delete().eq('user_email', email));
+      if (error) {
+        console.error('Error deleting files:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      ({ error } = await supabase.from('folders').delete().eq('user_email', email));
+      if (error) {
+        console.error('Error deleting folders:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
     } else {
       if (!fileId) {
         return NextResponse.json({ error: 'Missing file ID' }, { status: 400 });
