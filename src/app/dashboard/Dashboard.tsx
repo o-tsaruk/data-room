@@ -30,7 +30,7 @@ export function Dashboard() {
   const searchParams = useSearchParams();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [rootFiles, setRootFiles] = useState<File[]>([]); 
+  const [rootFiles, setRootFiles] = useState<File[]>([]);
   const [isPickerReady, setIsPickerReady] = useState(false);
   const [isGisReady, setIsGisReady] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -42,6 +42,7 @@ export function Dashboard() {
   const [isStarredView, setIsStarredView] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [currentFolderName, setCurrentFolderName] = useState<string | null>(null);
 
   const SCOPES = 'https://www.googleapis.com/auth/drive.readonly openid email profile';
@@ -91,11 +92,9 @@ export function Dashboard() {
     const newFolderId = folderId || null;
 
     setIsStarredView(starred);
-    // Only update selectedFolderId if not in starred view
     if (!starred && newFolderId !== selectedFolderId) {
       setSelectedFolderId(newFolderId);
     } else if (starred && selectedFolderId !== null) {
-      // Clear folder selection when switching to starred view
       setSelectedFolderId(null);
     }
   }, [searchParams]);
@@ -112,6 +111,10 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
+    if (searchTerm && searchTerm.trim()) {
+      return;
+    }
+
     setIsLoadingFiles(true);
 
     const fetchData = async () => {
@@ -168,7 +171,33 @@ export function Dashboard() {
     };
 
     fetchData();
-  }, [selectedFolderId, isStarredView]);
+  }, [selectedFolderId, isStarredView, searchTerm]);
+
+  useEffect(() => {
+    if (!searchTerm || !searchTerm.trim()) {
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const searchTimeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/files?search=${encodeURIComponent(searchTerm.trim())}`, {
+          method: 'GET',
+        });
+        if (!res.ok) throw new Error('Failed to search files');
+        const data: { files: File[] } = await res.json();
+        setSelectedFiles(data.files ?? []);
+        setFolders([]);
+      } catch (err) {
+        console.error('[Dashboard] Error searching files:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(searchTimeout);
+  }, [searchTerm]);
 
   const fetchUserFilesFromDB = useCallback(async () => {
     try {
@@ -360,7 +389,6 @@ export function Dashboard() {
       if (!res.ok) throw new Error('Failed to store files');
       toast.success('Files saved successfully.');
 
-      // If in starred view, switch to root after adding
       if (isStarredView) {
         router.push('/dashboard');
         setSelectedFolderId(null);
@@ -449,11 +477,7 @@ export function Dashboard() {
     <SidebarProvider>
       <AppSidebar onOpenPicker={handleOpenPicker} />
       <SidebarInset>
-        <DashboardHeader
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          disabled={selectedFiles.length === 0 && folders.length === 0}
-        />
+        <DashboardHeader searchTerm={searchTerm} onSearchChange={setSearchTerm} />
         <main className='w-full px-6 py-10'>
           {!isLoading && (
             <>
@@ -467,7 +491,7 @@ export function Dashboard() {
                 searchTerm={searchTerm}
                 onToggleStar={handleToggleStar}
                 activeView={isStarredView ? 'starred' : 'files'}
-                isLoading={isLoadingFiles}
+                isLoading={isLoadingFiles || isSearching}
                 currentFolderName={currentFolderName}
               />
             </>

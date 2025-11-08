@@ -16,10 +16,13 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const folderId = searchParams.get('folderId');
     const starred = searchParams.get('starred') === 'true';
+    const search = searchParams.get('search');
 
     let filesQuery = supabase.from('files').select('*').eq('user_email', email);
 
-    if (starred) {
+    if (search && search.trim()) {
+      filesQuery = filesQuery.ilike('name', `%${search.trim()}%`);
+    } else if (starred) {
       filesQuery = filesQuery.eq('starred', true);
     } else if (folderId === null || folderId === '') {
       filesQuery = filesQuery.is('folder_id', null);

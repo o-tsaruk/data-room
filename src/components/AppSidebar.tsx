@@ -442,11 +442,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
               ) : (
                 <>
                   <SidebarMenuItem className='border-b border-gray-100 pb-1 mb-1'>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isStarred}
-                      className={isStarred ? 'border border-black' : ''}
-                    >
+                    <SidebarMenuButton asChild isActive={isStarred}>
                       <a href='/dashboard?starred=true' onClick={handleStarredClick}>
                         <Star className='h-4 w-4' />
                         <span>Starred</span>
