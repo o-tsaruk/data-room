@@ -229,7 +229,6 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
     setFolderNameError(null);
 
     try {
-      // If in starred view, create folder in root
       const parentFolderId = isStarred ? null : currentFolderId || null;
 
       const existingFolder = folders.find(
@@ -268,6 +267,8 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
       }
 
       await fetchFolders();
+      // Dispatch event to notify Dashboard to refresh file list
+      window.dispatchEvent(new CustomEvent('folderCreated'));
     } catch (err: any) {
       console.error('Error creating folder:', err);
       setFolderNameError(err.message || 'Failed to create folder.');

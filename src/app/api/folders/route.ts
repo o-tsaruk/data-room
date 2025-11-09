@@ -91,6 +91,61 @@ export async function POST(req: Request) {
   }
 }
 
+export async function PATCH(req: Request) {
+  try {
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    const { folderId, name } = await req.json();
+    if (!folderId || !name) {
+      return NextResponse.json({ error: 'Folder ID and name are required' }, { status: 400 });
+    }
+
+    const { data: folder, error: folderError } = await supabase
+      .from('folders')
+      .select('parent_folder_id')
+      .eq('id', folderId)
+      .eq('user_email', email)
+      .single();
+
+    if (folderError || !folder) {
+      return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
+    }
+
+    const { data: existingFolders } = await supabase
+      .from('folders')
+      .select('id')
+      .eq('user_email', email)
+      .eq('name', name.trim())
+      .eq('parent_folder_id', folder.parent_folder_id)
+      .neq('id', folderId);
+
+    if (existingFolders && existingFolders.length > 0) {
+      return NextResponse.json(
+        { error: 'A folder with this name already exists in this location' },
+        { status: 409 },
+      );
+    }
+
+    const { error } = await supabase
+      .from('folders')
+      .update({ name: name.trim() })
+      .eq('id', folderId)
+      .eq('user_email', email);
+
+    if (error) {
+      console.error('Error renaming folder:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error renaming folder:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 async function deleteFolderRecursive(folderId: string, email: string): Promise<void> {
   const { data: childFolders } = await supabase
     .from('folders')

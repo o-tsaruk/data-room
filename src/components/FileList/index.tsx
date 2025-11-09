@@ -50,8 +50,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { File, Folder } from '@/src/types';
-import { useFileListColumns } from './FileList/FileListColumns';
-import { FolderRow } from './FileList/FolderRow';
+import { useFileListColumns } from './FileListColumns';
+import { FolderRow } from './FolderRow';
 
 type ActiveView = 'files' | 'starred';
 
