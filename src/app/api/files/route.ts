@@ -137,6 +137,81 @@ export async function POST(req: Request) {
   }
 }
 
+export async function PATCH(req: Request) {
+  try {
+    const session = await serverSession();
+    const email = session?.user?.email;
+    if (!email) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    const { fileId, name } = await req.json();
+    if (!fileId || !name) {
+      return NextResponse.json({ error: 'File ID and name are required' }, { status: 400 });
+    }
+
+    // Get the file to check its current folder and mime type
+    const { data: file, error: fileError } = await supabase
+      .from('files')
+      .select('folder_id, mime_type')
+      .eq('id', fileId)
+      .eq('user_email', email)
+      .single();
+
+    if (fileError || !file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Check for collision: same name + mimeType in the same folder
+    let collisionQuery = supabase
+      .from('files')
+      .select('id')
+      .eq('user_email', email)
+      .eq('name', name.trim())
+      .eq('mime_type', file.mime_type)
+      .neq('id', fileId);
+
+    // Handle null folder_id correctly
+    if (file.folder_id === null) {
+      collisionQuery = collisionQuery.is('folder_id', null);
+    } else {
+      collisionQuery = collisionQuery.eq('folder_id', file.folder_id);
+    }
+
+    const { data: existingFiles, error: collisionError } = await collisionQuery;
+
+    if (collisionError) {
+      console.error('Error checking for collisions:', collisionError);
+      return NextResponse.json(
+        { error: 'Error checking for file name collision' },
+        { status: 500 },
+      );
+    }
+
+    if (existingFiles && existingFiles.length > 0) {
+      return NextResponse.json(
+        { error: 'A file with this name and type already exists in this folder' },
+        { status: 409 },
+      );
+    }
+
+    // Update the file name
+    const { error } = await supabase
+      .from('files')
+      .update({ name: name.trim() })
+      .eq('id', fileId)
+      .eq('user_email', email);
+
+    if (error) {
+      console.error('Error renaming file:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error renaming file:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);

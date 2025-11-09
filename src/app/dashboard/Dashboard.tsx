@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ export function Dashboard() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [isStarredView, setIsStarredView] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [allFolders, setAllFolders] = useState<Folder[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [currentFolderName, setCurrentFolderName] = useState<string | null>(null);
@@ -199,6 +200,26 @@ export function Dashboard() {
     return () => clearTimeout(searchTimeout);
   }, [searchTerm]);
 
+  // Fetch all folders for breadcrumb navigation
+  const fetchAllFolders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/folders');
+      if (res.ok) {
+        const data: { folders: any[] } = await res.json();
+        // Transform from snake_case to camelCase for breadcrumb
+        const camelFolders: Folder[] = (data.folders ?? []).map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          parentFolderId: f.parent_folder_id,
+          createdAt: f.created_at,
+        }));
+        setAllFolders(camelFolders);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Error loading all folders:', err);
+    }
+  }, []);
+
   const fetchUserFilesFromDB = useCallback(async () => {
     try {
       if (isStarredView) {
@@ -249,15 +270,47 @@ export function Dashboard() {
   }, [selectedFolderId, isStarredView]);
 
   useEffect(() => {
+    // Fetch all folders on mount and when folders change
+    fetchAllFolders();
+  }, [fetchAllFolders]);
+
+  useEffect(() => {
     const handleAllFilesDeleted = () => {
       setSelectedFiles([]);
       setFolders([]);
       setSelectedFolderId(null);
       window.history.pushState({}, '', '/dashboard');
     };
+
+    const handleFolderCreated = () => {
+      // Refresh file list and all folders when a folder is created
+      fetchUserFilesFromDB();
+      fetchAllFolders();
+    };
+
+    const handleFolderRenamed = () => {
+      // Refresh file list and all folders when a folder is renamed
+      fetchUserFilesFromDB();
+      fetchAllFolders();
+    };
+
+    const handleFolderDeleted = () => {
+      // Refresh all folders when a folder is deleted
+      fetchAllFolders();
+    };
+
     window.addEventListener('allFilesDeleted', handleAllFilesDeleted);
-    return () => window.removeEventListener('allFilesDeleted', handleAllFilesDeleted);
-  }, []);
+    window.addEventListener('folderCreated', handleFolderCreated);
+    window.addEventListener('folderRenamed', handleFolderRenamed);
+    window.addEventListener('folderDeleted', handleFolderDeleted);
+
+    return () => {
+      window.removeEventListener('allFilesDeleted', handleAllFilesDeleted);
+      window.removeEventListener('folderCreated', handleFolderCreated);
+      window.removeEventListener('folderRenamed', handleFolderRenamed);
+      window.removeEventListener('folderDeleted', handleFolderDeleted);
+    };
+  }, [fetchUserFilesFromDB, fetchAllFolders]);
 
   const initializePicker = async () => {
     try {
@@ -288,19 +341,56 @@ export function Dashboard() {
       return;
     }
 
-    const picker = new window.google.picker.PickerBuilder()
-      .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
-      .setDeveloperKey(API_KEY)
-      .setAppId(APP_ID)
-      .setOAuthToken(token)
-      .addView(window.google.picker.ViewId.DOCS)
-      .setCallback(pickerCallback)
-      .build();
+    let pickerCallbackCalled = false;
+    let timeoutId: NodeJS.Timeout | null = null;
 
-    picker.setVisible(true);
+    // Enhanced callback that tracks if it was called
+    const enhancedCallback = (data: any) => {
+      pickerCallbackCalled = true;
+
+      // Clear timeout since callback was called
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
+      pickerCallback(data);
+    };
+
+    try {
+      const picker = new window.google.picker.PickerBuilder()
+        .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
+        .setDeveloperKey(API_KEY)
+        .setAppId(APP_ID)
+        .setOAuthToken(token)
+        .addView(window.google.picker.ViewId.DOCS)
+        .setCallback(enhancedCallback)
+        .build();
+
+      picker.setVisible(true);
+
+      // Add timeout to detect if picker fails to load (403 error)
+      // If callback isn't called within 3 seconds, assume 403 error
+      timeoutId = setTimeout(() => {
+        if (!pickerCallbackCalled) {
+          // Picker failed to load, likely due to 403 error
+          // Logout and redirect to login with relogin parameter
+          signOut({ callbackUrl: '/login?relogin=true' });
+        }
+      }, 3000);
+    } catch (error: any) {
+      console.error('Error creating picker:', error);
+    }
   };
 
   const pickerCallback = (data: any) => {
+    // Check for errors
+    if (data[window.google.picker.Response.ERROR]) {
+      const error = data[window.google.picker.Response.ERROR];
+      console.error('Google Picker error:', error);
+      return;
+    }
+
     if (data[window.google.picker.Response.ACTION] === window.google.picker.Action.PICKED) {
       const docs = data[window.google.picker.Response.DOCUMENTS];
 
@@ -469,6 +559,44 @@ export function Dashboard() {
     }
   };
 
+  const handleCopy = (url: string) => {
+    navigator.clipboard.writeText(url);
+    toast.success('Link copied to clipboard.');
+  };
+
+  const handleRenameFile = async (fileId: string, newName: string) => {
+    const res = await fetch('/api/files', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId, name: newName }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      const errorMessage = errorData.error || res.statusText;
+      throw new Error(errorMessage);
+    }
+
+    await fetchUserFilesFromDB();
+  };
+
+  const handleRenameFolder = async (folderId: string, newName: string) => {
+    const res = await fetch('/api/folders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId, name: newName }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      const errorMessage = errorData.error || res.statusText;
+      throw new Error(errorMessage);
+    }
+
+    await fetchUserFilesFromDB();
+    window.dispatchEvent(new CustomEvent('folderRenamed'));
+  };
+
   if (status === 'loading' || status === 'unauthenticated') {
     return null;
   }
@@ -477,8 +605,14 @@ export function Dashboard() {
     <SidebarProvider>
       <AppSidebar onOpenPicker={handleOpenPicker} />
       <SidebarInset>
-        <DashboardHeader searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-        <main className='w-full px-6 py-10'>
+        <DashboardHeader
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          folders={allFolders}
+          selectedFolderId={selectedFolderId}
+          isStarredView={isStarredView}
+        />
+        <main className='w-full px-6 pb-10'>
           {!isLoading && (
             <>
               <FileList
@@ -488,6 +622,9 @@ export function Dashboard() {
                 onRemove={handleRemoveFile}
                 onFolderClick={handleFolderClick}
                 onDeleteFolder={handleDeleteFolder}
+                onCopy={handleCopy}
+                onRenameFile={handleRenameFile}
+                onRenameFolder={handleRenameFolder}
                 searchTerm={searchTerm}
                 onToggleStar={handleToggleStar}
                 activeView={isStarredView ? 'starred' : 'files'}

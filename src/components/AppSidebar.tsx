@@ -268,6 +268,8 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
       }
 
       await fetchFolders();
+      // Dispatch event to notify Dashboard to refresh file list
+      window.dispatchEvent(new CustomEvent('folderCreated'));
     } catch (err: any) {
       console.error('Error creating folder:', err);
       setFolderNameError(err.message || 'Failed to create folder.');

@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field';
@@ -12,6 +13,7 @@ import { AuthErrorDialog } from '@/src/components/AuthErrorDialog';
 export default function LoginPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
 
   useEffect(() => {
@@ -19,6 +21,16 @@ export default function LoginPage() {
       router.push('/dashboard');
     }
   }, [status, router]);
+
+  useEffect(() => {
+    // Check for relogin parameter
+    const relogin = searchParams.get('relogin');
+    if (relogin === 'true') {
+      toast.error('Please re-login');
+      // Remove the parameter from URL
+      router.replace('/login');
+    }
+  }, [searchParams, router]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
