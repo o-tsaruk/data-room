@@ -415,7 +415,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
       <SidebarContent>
         <div className='p-2 space-y-2'>
           {!isSettingsPage && (
-            <Button onClick={handleNewFolderClick} className='w-full' size='sm'>
+            <Button onClick={handleNewFolderClick} className='w-full h-8' size='sm'>
               New Folder
             </Button>
           )}
@@ -427,7 +427,8 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
                 }
                 onOpenPicker();
               }}
-              className='w-full size-sm bg-black text-white hover:bg-gray-800'
+              className='w-full h-8 bg-black text-white hover:bg-gray-800'
+              size='sm'
             >
               New File
             </Button>

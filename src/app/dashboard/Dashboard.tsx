@@ -643,11 +643,6 @@ export function Dashboard() {
             />
           )}
         </main>
-        <div className='fixed bottom-6 right-6 z-20'>
-          <Button onClick={handleOpenPicker} className='h-12 px-5 text-sm'>
-            Upload New File
-          </Button>
-        </div>
       </SidebarInset>
     </SidebarProvider>
   );
