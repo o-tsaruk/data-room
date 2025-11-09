@@ -229,7 +229,6 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
     setFolderNameError(null);
 
     try {
-      // If in starred view, create folder in root
       const parentFolderId = isStarred ? null : currentFolderId || null;
 
       const existingFolder = folders.find(

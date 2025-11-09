@@ -200,7 +200,6 @@ export function Dashboard() {
     return () => clearTimeout(searchTimeout);
   }, [searchTerm]);
 
-  // Fetch all folders for breadcrumb navigation
   const fetchAllFolders = useCallback(async () => {
     try {
       const res = await fetch('/api/folders');
@@ -229,7 +228,6 @@ export function Dashboard() {
         setSelectedFiles(data.files ?? []);
         setFolders([]);
 
-        // Always fetch root files for collision checking when in starred view
         const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
         if (rootRes.ok) {
           const rootData: { files: File[] } = await rootRes.json();
@@ -270,7 +268,6 @@ export function Dashboard() {
   }, [selectedFolderId, isStarredView]);
 
   useEffect(() => {
-    // Fetch all folders on mount and when folders change
     fetchAllFolders();
   }, [fetchAllFolders]);
 
@@ -283,19 +280,16 @@ export function Dashboard() {
     };
 
     const handleFolderCreated = () => {
-      // Refresh file list and all folders when a folder is created
       fetchUserFilesFromDB();
       fetchAllFolders();
     };
 
     const handleFolderRenamed = () => {
-      // Refresh file list and all folders when a folder is renamed
       fetchUserFilesFromDB();
       fetchAllFolders();
     };
 
     const handleFolderDeleted = () => {
-      // Refresh all folders when a folder is deleted
       fetchAllFolders();
     };
 
@@ -344,11 +338,9 @@ export function Dashboard() {
     let pickerCallbackCalled = false;
     let timeoutId: NodeJS.Timeout | null = null;
 
-    // Enhanced callback that tracks if it was called
     const enhancedCallback = (data: any) => {
       pickerCallbackCalled = true;
 
-      // Clear timeout since callback was called
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
@@ -384,7 +376,6 @@ export function Dashboard() {
   };
 
   const pickerCallback = (data: any) => {
-    // Check for errors
     if (data[window.google.picker.Response.ERROR]) {
       const error = data[window.google.picker.Response.ERROR];
       console.error('Google Picker error:', error);

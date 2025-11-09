@@ -23,11 +23,9 @@ export default function LoginPage() {
   }, [status, router]);
 
   useEffect(() => {
-    // Check for relogin parameter
     const relogin = searchParams.get('relogin');
     if (relogin === 'true') {
       toast.error('Please re-login');
-      // Remove the parameter from URL
       router.replace('/login');
     }
   }, [searchParams, router]);

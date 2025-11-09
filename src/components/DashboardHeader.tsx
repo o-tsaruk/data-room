@@ -55,7 +55,6 @@ export default function DashboardHeader({
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [isDeletingFiles, setIsDeletingFiles] = useState(false);
 
-  // Build breadcrumb path from current folder to root
   const breadcrumbPath = useMemo(() => {
     if (isStarredView) {
       return [{ id: null, name: 'Starred' }];
@@ -67,13 +66,11 @@ export default function DashboardHeader({
       return path;
     }
 
-    // Build a map of folder id to folder for quick lookup
     const folderMap = new Map<string, Folder>();
     folders.forEach((folder) => {
       folderMap.set(folder.id, folder);
     });
 
-    // Traverse from current folder up to root
     let currentFolderId: string | null = selectedFolderId;
     const pathItems: { id: string; name: string }[] = [];
 
@@ -88,15 +85,14 @@ export default function DashboardHeader({
     return [...path, ...pathItems];
   }, [folders, selectedFolderId, isStarredView]);
 
-  // Determine if we need to show ellipsis (more than 3 items: All files + 2 folders)
   const shouldShowEllipsis = breadcrumbPath.length > 3;
   const ellipsisItems = shouldShowEllipsis
-    ? breadcrumbPath.slice(1, -2) // Items between "All files" and last 2 folders
+    ? breadcrumbPath.slice(1, -2) 
     : [];
   const visibleItems = shouldShowEllipsis
     ? [
-        breadcrumbPath[0], // All files
-        ...breadcrumbPath.slice(-2), // Last 2 folders
+        breadcrumbPath[0], 
+        ...breadcrumbPath.slice(-2), 
       ]
     : breadcrumbPath;
 
@@ -237,7 +233,6 @@ export default function DashboardHeader({
                   </BreadcrumbItem>
                 </>
               ) : (
-                // Show full path when 3 or fewer items
                 visibleItems.map((item, index) => (
                   <React.Fragment key={item.id || 'root'}>
                     {index > 0 && <BreadcrumbSeparator />}

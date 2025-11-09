@@ -39,7 +39,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ files: [], folders: [] });
     }
 
-    // Fetch folders in the current folder (skip if starred view)
     let folders: any[] = [];
     if (!starred) {
       let foldersQuery = supabase.from('folders').select('*').eq('user_email', email);
@@ -148,7 +147,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'File ID and name are required' }, { status: 400 });
     }
 
-    // Get the file to check its current folder and mime type
     const { data: file, error: fileError } = await supabase
       .from('files')
       .select('folder_id, mime_type')
@@ -160,7 +158,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    // Check for collision: same name + mimeType in the same folder
     let collisionQuery = supabase
       .from('files')
       .select('id')
@@ -169,7 +166,6 @@ export async function PATCH(req: Request) {
       .eq('mime_type', file.mime_type)
       .neq('id', fileId);
 
-    // Handle null folder_id correctly
     if (file.folder_id === null) {
       collisionQuery = collisionQuery.is('folder_id', null);
     } else {
@@ -193,7 +189,6 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Update the file name
     const { error } = await supabase
       .from('files')
       .update({ name: name.trim() })

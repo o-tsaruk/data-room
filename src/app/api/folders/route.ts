@@ -102,7 +102,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Folder ID and name are required' }, { status: 400 });
     }
 
-    // Get the folder to check its current parent folder
     const { data: folder, error: folderError } = await supabase
       .from('folders')
       .select('parent_folder_id')
@@ -114,7 +113,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
     }
 
-    // Check for collision: same name in the same parent folder
     const { data: existingFolders } = await supabase
       .from('folders')
       .select('id')
@@ -130,7 +128,6 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Update the folder name
     const { error } = await supabase
       .from('folders')
       .update({ name: name.trim() })
