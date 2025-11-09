@@ -86,14 +86,9 @@ export default function DashboardHeader({
   }, [folders, selectedFolderId, isStarredView]);
 
   const shouldShowEllipsis = breadcrumbPath.length > 3;
-  const ellipsisItems = shouldShowEllipsis
-    ? breadcrumbPath.slice(1, -2) 
-    : [];
+  const ellipsisItems = shouldShowEllipsis ? breadcrumbPath.slice(1, -2) : [];
   const visibleItems = shouldShowEllipsis
-    ? [
-        breadcrumbPath[0], 
-        ...breadcrumbPath.slice(-2), 
-      ]
+    ? [breadcrumbPath[0], ...breadcrumbPath.slice(-2)]
     : breadcrumbPath;
 
   const handleBreadcrumbClick = (folderId: string | null) => {

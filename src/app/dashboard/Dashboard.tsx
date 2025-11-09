@@ -366,8 +366,8 @@ export function Dashboard() {
       timeoutId = setTimeout(() => {
         if (!pickerCallbackCalled) {
           // Picker failed to load, likely due to 403 error
-          // Logout and redirect to login with relogin parameter
-          signOut({ callbackUrl: '/login?relogin=true' });
+          // Logout and redirect to login
+          signOut({ callbackUrl: '/login' });
         }
       }, 3000);
     } catch (error: any) {

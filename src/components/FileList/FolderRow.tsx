@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
+import { ChevronRight, Folder as FolderIcon, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
-import { ChevronRight, Folder as FolderIcon, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 
 type FolderWithChildren = {
   id: string;
@@ -126,4 +126,3 @@ export function FolderRow({
     </TableRow>
   );
 }
-

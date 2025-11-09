@@ -2,7 +2,16 @@
 
 import * as React from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Copy, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ExternalLink,
+  Copy,
+  MoreVertical,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -273,4 +282,3 @@ export function useFileListColumns({
     ],
   );
 }
-
