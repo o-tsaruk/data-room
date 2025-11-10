@@ -98,7 +98,7 @@ export function CollapsibleArrow({ className }: CollapsibleArrowProps) {
       className={cn(
         'h-4 w-4 transition-transform duration-200 text-gray-500',
         isOpen && 'rotate-90',
-        className
+        className,
       )}
     />
   );
@@ -117,11 +117,10 @@ export function CollapsibleContent({ children, className }: CollapsibleContentPr
       className={cn(
         'overflow-hidden transition-all duration-200 ease-in-out',
         isOpen ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0',
-        className
+        className,
       )}
     >
       {children}
     </div>
   );
 }
-

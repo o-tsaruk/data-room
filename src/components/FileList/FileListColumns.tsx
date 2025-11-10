@@ -238,7 +238,7 @@ export function useFileListColumns({
                     }}
                   >
                     <Copy className='h-4 w-4 mr-2' />
-                    Copy
+                    Copy URL
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className='cursor-pointer'

@@ -16,12 +16,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  CustomCollapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-  CollapsibleArrow,
-} from '@/src/components/CustomCollapsible';
 import { Input } from '@/components/ui/input';
 import {
   Sidebar,
@@ -37,6 +31,12 @@ import {
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  CustomCollapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+  CollapsibleArrow,
+} from '@/src/components/CustomCollapsible';
 
 interface FolderData {
   id: string;
