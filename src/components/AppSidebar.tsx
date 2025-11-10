@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Folder, ChevronRight, Star } from 'lucide-react';
+import { Folder, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
@@ -16,7 +16,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  CustomCollapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+  CollapsibleArrow,
+} from '@/src/components/CustomCollapsible';
 import { Input } from '@/components/ui/input';
 import {
   Sidebar,
@@ -92,12 +97,12 @@ function FolderTreeItem({
 
   if (!isNested) {
     return (
-      <Collapsible defaultOpen className='group/collapsible'>
+      <CustomCollapsible defaultOpen className='group/collapsible'>
         <SidebarMenuItem>
           <div className='flex items-center w-full'>
             <CollapsibleTrigger asChild>
               <button className='p-0 hover:bg-transparent' onClick={(e) => e.stopPropagation()}>
-                <ChevronRight className='h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-gray-500' />
+                <CollapsibleArrow />
               </button>
             </CollapsibleTrigger>
             <SidebarMenuButton
@@ -123,17 +128,17 @@ function FolderTreeItem({
             </SidebarMenuSub>
           </CollapsibleContent>
         </SidebarMenuItem>
-      </Collapsible>
+      </CustomCollapsible>
     );
   }
 
   return (
     <SidebarMenuSubItem>
-      <Collapsible defaultOpen className='group/collapsible'>
+      <CustomCollapsible defaultOpen className='group/collapsible'>
         <div className='flex items-center w-full'>
           <CollapsibleTrigger asChild>
             <button className='p-0 hover:bg-transparent' onClick={(e) => e.stopPropagation()}>
-              <ChevronRight className='h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-gray-500' />
+              <CollapsibleArrow />
             </button>
           </CollapsibleTrigger>
           <SidebarMenuSubButton
@@ -158,7 +163,7 @@ function FolderTreeItem({
             ))}
           </SidebarMenuSub>
         </CollapsibleContent>
-      </Collapsible>
+      </CustomCollapsible>
     </SidebarMenuSubItem>
   );
 }
@@ -294,12 +299,12 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
   function RootFolderItem() {
     if (rootHasChildren) {
       return (
-        <Collapsible defaultOpen className='group/collapsible'>
+        <CustomCollapsible defaultOpen className='group/collapsible'>
           <SidebarMenuItem>
             <div className='flex items-center w-full'>
               <CollapsibleTrigger asChild>
                 <button className='p-0 hover:bg-transparent' onClick={(e) => e.stopPropagation()}>
-                  <ChevronRight className='h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-gray-500' />
+                  <CollapsibleArrow />
                 </button>
               </CollapsibleTrigger>
               <SidebarMenuButton
@@ -324,7 +329,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
               </SidebarMenuSub>
             </CollapsibleContent>
           </SidebarMenuItem>
-        </Collapsible>
+        </CustomCollapsible>
       );
     }
 
