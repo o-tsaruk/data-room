@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useEffect } from 'react';
 import {
   ColumnFiltersState,
   flexRender,
@@ -256,13 +257,13 @@ export default function FileList({
 
   const filteredFiles = table.getRowModel().rows;
 
-  React.useEffect(() => {
+  useEffect(() => {
     const selectedRows = table.getFilteredSelectedRowModel().rows;
     const selected = selectedRows.map((row) => row.original);
     setSelectedFiles(selected);
   }, [rowSelection, table]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const selectedIds = Object.keys(rowSelection);
     const existingIds = new Set(files.map((f) => f.id));
     const hasInvalidSelection = selectedIds.some((id) => !existingIds.has(id));
@@ -272,7 +273,7 @@ export default function FileList({
     }
   }, [files, rowSelection]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const allFolderIds = new Set(folders.map((f) => f.id));
     const hasInvalidSelection = Array.from(selectedFolders).some((id) => !allFolderIds.has(id));
     if (hasInvalidSelection) {
@@ -288,7 +289,7 @@ export default function FileList({
     }
   }, [folders, selectedFolders]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (typeof searchTerm === 'string') {
       table.getColumn('name')?.setFilterValue(searchTerm.trim());
     }

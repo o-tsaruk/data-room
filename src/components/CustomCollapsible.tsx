@@ -69,14 +69,14 @@ export function CollapsibleTrigger({
   };
 
   if (asChild && children) {
-    const child = children as React.ReactElement;
+    const child = children as React.ReactElement<any>;
     return React.cloneElement(child, {
       onClick: (e: React.MouseEvent) => {
         handleClick(e);
         child.props?.onClick?.(e);
       },
       className: cn(className, child.props?.className),
-    });
+    } as any);
   }
 
   return (
