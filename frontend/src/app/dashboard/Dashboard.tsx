@@ -113,6 +113,10 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
+    if (status === 'loading' || !session?.user?.email) {
+      return;
+    }
+
     if (searchTerm && searchTerm.trim()) {
       return;
     }
@@ -121,7 +125,8 @@ export function Dashboard() {
 
     const fetchData = async () => {
       try {
-        const userEmail = session?.user?.email || null;
+        const userEmail = session?.user?.email;
+        if (!userEmail) return;
         if (isStarredView) {
           const res = await apiRequest('/api/files?starred=true', { method: 'GET' }, userEmail);
           if (!res.ok) throw new Error('Failed to fetch starred files from DB');
@@ -174,7 +179,7 @@ export function Dashboard() {
     };
 
     fetchData();
-  }, [selectedFolderId, isStarredView, searchTerm]);
+  }, [selectedFolderId, isStarredView, searchTerm, session, status]);
 
   useEffect(() => {
     if (!searchTerm || !searchTerm.trim()) {
@@ -182,10 +187,15 @@ export function Dashboard() {
       return;
     }
 
+    if (status === 'loading' || !session?.user?.email) {
+      return;
+    }
+
     setIsSearching(true);
     const searchTimeout = setTimeout(async () => {
       try {
-        const userEmail = session?.user?.email || null;
+        const userEmail = session?.user?.email;
+        if (!userEmail) return;
         const res = await apiRequest(
           `/api/files?search=${encodeURIComponent(searchTerm.trim())}`,
           {
@@ -205,7 +215,7 @@ export function Dashboard() {
     }, 300);
 
     return () => clearTimeout(searchTimeout);
-  }, [searchTerm]);
+  }, [searchTerm, session, status]);
 
   const fetchAllFolders = useCallback(async () => {
     try {
@@ -228,8 +238,12 @@ export function Dashboard() {
   }, [session]);
 
   const fetchUserFilesFromDB = useCallback(async () => {
+    if (!session?.user?.email) {
+      return;
+    }
+
     try {
-      const userEmail = session?.user?.email || null;
+      const userEmail = session.user.email;
       if (isStarredView) {
         const res = await apiRequest('/api/files?starred=true', { method: 'GET' }, userEmail);
         if (!res.ok) throw new Error('Failed to fetch starred files from DB');
