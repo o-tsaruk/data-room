@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import LogoutButton from '@/src/components/LogoutButton';
 import { Folder } from '@/src/types';
+import { apiRequest } from '@/src/utils/api';
 import Settings from './Settings';
 
 interface DashboardHeaderProps {
@@ -102,7 +103,8 @@ export default function DashboardHeader({
   const handleDeleteAllFiles = useCallback(async () => {
     setIsDeletingFiles(true);
     try {
-      const res = await fetch('/api/files?all=true', { method: 'DELETE' });
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest('/api/files?all=true', { method: 'DELETE' }, userEmail);
       if (!res.ok) {
         const data = await res.json();
         console.error('Failed to delete all files:', data.error || res.statusText);
@@ -120,7 +122,7 @@ export default function DashboardHeader({
       setIsDeletingFiles(false);
       return false;
     }
-  }, []);
+  }, [session]);
 
   const handleDeleteFilesComplete = useCallback(() => {
     setSettingsDialogOpen(false);
@@ -128,7 +130,8 @@ export default function DashboardHeader({
 
   const handleDeleteAccount = useCallback(async () => {
     try {
-      const res = await fetch('/api/account', { method: 'DELETE' });
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest('/api/account', { method: 'DELETE' }, userEmail);
       if (!res.ok) {
         const data = await res.json();
         console.error('Failed to delete account:', data.error || res.statusText);
@@ -139,7 +142,7 @@ export default function DashboardHeader({
       console.error('Delete account error:', e);
       toast.error('Failed to delete account.');
     }
-  }, []);
+  }, [router, session]);
 
   function SettingsDialog() {
     return (
