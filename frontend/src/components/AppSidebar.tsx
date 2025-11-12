@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Folder, Star } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
@@ -37,6 +38,7 @@ import {
   CollapsibleContent,
   CollapsibleArrow,
 } from '@/src/components/CustomCollapsible';
+import { apiRequest } from '@/src/utils/api';
 
 interface FolderData {
   id: string;
@@ -172,6 +174,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const { data: session } = useSession();
   const currentFolderId = searchParams.get('folder');
   const isStarred = searchParams.get('starred') === 'true';
   const isSettingsPage = pathname === '/settings';
@@ -186,7 +189,8 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
 
   const fetchFolders = useCallback(async () => {
     try {
-      const res = await fetch('/api/folders');
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest('/api/folders', { method: 'GET' }, userEmail);
       if (!res.ok) throw new Error('Failed to fetch folders');
       const data = await res.json();
       const allFolders = data.folders ?? [];
@@ -196,7 +200,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     fetchFolders();
@@ -248,14 +252,18 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
         return;
       }
 
-      const res = await fetch('/api/folders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: folderName.trim(),
-          parent_folder_id: parentFolderId,
-        }),
-      });
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest(
+        '/api/folders',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: folderName.trim(),
+            parent_folder_id: parentFolderId,
+          }),
+        },
+        userEmail,
+      );
 
       if (!res.ok) {
         const data = await res.json();
@@ -280,7 +288,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
     } finally {
       setIsCreatingFolder(false);
     }
-  }, [folderName, currentFolderId, fetchFolders, isStarred, router, folders]);
+  }, [folderName, currentFolderId, fetchFolders, isStarred, router, folders, session]);
 
   const handleRootClick = (e: React.MouseEvent) => {
     e.preventDefault();

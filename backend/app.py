@@ -6,18 +6,20 @@ from flask_migrate import Migrate
 
 from config import config
 from models import db
+from api import api_bp
 
 migrate = Migrate()
 app = Flask(__name__)
 
-config_name = os.environ.get('FLASK_ENV', 'development')
-if config_name not in config:
-    config_name = 'development'
-app.config.from_object(config[config_name])
+# Use default development config
+app.config.from_object(config['default'])
 
 db.init_app(app)
 migrate.init_app(app, db)
 CORS(app, origins=app.config['CORS_ORIGINS'], supports_credentials=True)
+
+# Register API blueprint
+app.register_blueprint(api_bp)
 
 
 @app.route('/health')
