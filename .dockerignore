@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Environment files
+.env
+.env.local
+.env*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (will be installed in container)
+frontend/node_modules
+frontend/.next
+frontend/out
+
+# Python
+backend/__pycache__
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.Python
+backend/venv
+backend/env
+backend/.venv
+
+# Logs
+*.log
+logs
+
+# Testing
+coverage
+.nyc_output
+
+# Build artifacts
+dist
+build
+
