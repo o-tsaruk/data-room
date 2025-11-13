@@ -427,6 +427,19 @@ export default function FileList({
   }
 
   if (files.length === 0 && folders.length === 0) {
+    if (searchTerm && searchTerm.trim()) {
+      return (
+        <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
+          <EmptyHeader>
+            <EmptyMedia variant='default'>
+              <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
+            </EmptyMedia>
+            <EmptyTitle>No results found</EmptyTitle>
+            <EmptyDescription>Try adjusting your search terms</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      );
+    }
     return (
       <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
         <EmptyHeader>
@@ -441,6 +454,25 @@ export default function FileList({
             <Button onClick={onOpen}>{emptyState.buttonLabel}</Button>
           </EmptyContent>
         )}
+      </Empty>
+    );
+  }
+
+  if (
+    searchTerm &&
+    searchTerm.trim() &&
+    filteredFiles.length === 0 &&
+    filteredFolderTree.length === 0
+  ) {
+    return (
+      <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
+        <EmptyHeader>
+          <EmptyMedia variant='default'>
+            <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
+          </EmptyMedia>
+          <EmptyTitle>No results found</EmptyTitle>
+          <EmptyDescription>Try adjusting your search terms</EmptyDescription>
+        </EmptyHeader>
       </Empty>
     );
   }
@@ -494,23 +526,15 @@ export default function FileList({
 
           <TableBody>
             {filteredFolderTree.map((folder) => renderFolderRow(folder))}
-            {filteredFiles.length > 0 ? (
-              filteredFiles.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : filteredFolderTree.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className='h-24 text-center'>
-                  No results.
-                </TableCell>
+            {filteredFiles.map((row) => (
+              <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
               </TableRow>
-            ) : null}
+            ))}
           </TableBody>
         </Table>
       </div>

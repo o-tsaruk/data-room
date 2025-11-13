@@ -51,6 +51,11 @@ def create_folder():
         if not name:
             return jsonify({'error': 'Folder name is required'}), 400
         
+        name = name.strip()
+        
+        if len(name) > 30:
+            return jsonify({'error': 'Folder name must be 30 characters or less'}), 400
+        
         supabase = get_supabase()
         
         # Validate parent folder if provided
@@ -92,6 +97,11 @@ def update_folder():
         if not folder_id or not name:
             return jsonify({'error': 'Folder ID and name are required'}), 400
         
+        name = name.strip()
+        
+        if len(name) > 30:
+            return jsonify({'error': 'Folder name must be 30 characters or less'}), 400
+        
         supabase = get_supabase()
         
         folder_response = supabase.table('folders').select('parent_folder_id').eq('id', folder_id).eq('user_email', email).execute()
@@ -102,13 +112,22 @@ def update_folder():
         folder_data = folder_response.data[0]
         parent_folder_id = folder_data.get('parent_folder_id')
         
-        collision_query = supabase.table('folders').select('id').eq('user_email', email).eq('name', name.strip()).eq('parent_folder_id', parent_folder_id).neq('id', folder_id)
+        # Check for duplicate name in the same parent folder (excluding current folder)
+        collision_query = supabase.table('folders').select('id').eq('user_email', email).eq('name', name)
+        
+        # Handle NULL parent_folder_id comparison correctly
+        if parent_folder_id is None:
+            collision_query = collision_query.is_('parent_folder_id', 'null')
+        else:
+            collision_query = collision_query.eq('parent_folder_id', parent_folder_id)
+        
+        collision_query = collision_query.neq('id', folder_id)
         collision_response = collision_query.execute()
         
         if collision_response.data and len(collision_response.data) > 0:
             return jsonify({'error': 'A folder with this name already exists in this location'}), 409
         
-        supabase.table('folders').update({'name': name.strip()}).eq('id', folder_id).eq('user_email', email).execute()
+        supabase.table('folders').update({'name': name}).eq('id', folder_id).eq('user_email', email).execute()
         
         return jsonify({'success': True}), 200
     except Exception as e:

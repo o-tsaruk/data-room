@@ -185,7 +185,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [folderNameError, setFolderNameError] = useState<string | null>(null);
 
-  const folderNameIsValid = /^[a-zA-Z0-9]+$/.test(folderName);
+  const folderNameIsValid = folderName.trim().length > 0 && folderName.trim().length <= 30;
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -227,10 +227,10 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
   const handleNewFolder = useCallback(async () => {
     if (!folderName || !folderName.trim()) return;
 
-    const folderNameIsValid = /^[a-zA-Z0-9]+$/.test(folderName);
+    const trimmedName = folderName.trim();
 
-    if (!folderNameIsValid) {
-      setFolderNameError('Folder name must contain only letters and numbers.');
+    if (trimmedName.length > 30) {
+      setFolderNameError('Folder name must be 30 characters or less.');
       return;
     }
 
@@ -375,7 +375,7 @@ export function AppSidebar({ onOpenPicker }: { onOpenPicker?: () => void }) {
             />
             {!folderNameIsValid && folderName.length > 0 && (
               <div className='text-xs text-red-600 mt-2'>
-                Folder name must contain only letters and numbers
+                Folder name must be 30 characters or less
               </div>
             )}
             {folderNameError && <div className='text-xs text-red-600 mt-2'>{folderNameError}</div>}

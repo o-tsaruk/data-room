@@ -39,8 +39,12 @@ export function Dashboard() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [conflicts, setConflicts] = useState<File[] | null>(null);
   const [nonConflicting, setNonConflicting] = useState<File[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [isStarredView, setIsStarredView] = useState(false);
+  const folderIdFromUrl = searchParams.get('folder');
+  const starredFromUrl = searchParams.get('starred') === 'true';
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(
+    starredFromUrl ? null : folderIdFromUrl || null,
+  );
+  const [isStarredView, setIsStarredView] = useState(starredFromUrl);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [allFolders, setAllFolders] = useState<Folder[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
@@ -94,9 +98,9 @@ export function Dashboard() {
     const newFolderId = folderId || null;
 
     setIsStarredView(starred);
-    if (!starred && newFolderId !== selectedFolderId) {
+    if (!starred) {
       setSelectedFolderId(newFolderId);
-    } else if (starred && selectedFolderId !== null) {
+    } else {
       setSelectedFolderId(null);
     }
   }, [searchParams]);
@@ -127,7 +131,9 @@ export function Dashboard() {
       try {
         const userEmail = session?.user?.email;
         if (!userEmail) return;
-        if (isStarredView) {
+        const starred = searchParams.get('starred') === 'true';
+        const folderId = searchParams.get('folder');
+        if (starred) {
           const res = await apiRequest('/api/files?starred=true', { method: 'GET' }, userEmail);
           if (!res.ok) throw new Error('Failed to fetch starred files from DB');
           const data: { files: File[] } = await res.json();
@@ -141,8 +147,9 @@ export function Dashboard() {
             setRootFiles(rootData.files ?? []);
           }
         } else {
-          const url = selectedFolderId
-            ? `/api/files?folderId=${selectedFolderId}`
+          const currentFolderId = folderId || null;
+          const url = currentFolderId
+            ? `/api/files?folderId=${currentFolderId}`
             : '/api/files?folderId=';
           const res = await apiRequest(url, { method: 'GET' }, userEmail);
 
@@ -151,7 +158,7 @@ export function Dashboard() {
           setSelectedFiles(data.files ?? []);
           setFolders(data.folders ?? []);
 
-          if (selectedFolderId) {
+          if (currentFolderId) {
             const rootRes = await apiRequest('/api/files?folderId=', { method: 'GET' }, userEmail);
             if (rootRes.ok) {
               const rootData: { files: File[] } = await rootRes.json();
@@ -161,8 +168,8 @@ export function Dashboard() {
             setRootFiles(data.files ?? []);
           }
 
-          if (selectedFolderId) {
-            const folder = data.folders?.find((f) => f.id === selectedFolderId);
+          if (currentFolderId) {
+            const folder = data.folders?.find((f) => f.id === currentFolderId);
             setCurrentFolderName(folder?.name || null);
           } else {
             setCurrentFolderName(null);
@@ -172,14 +179,16 @@ export function Dashboard() {
         console.error('[Dashboard] Error loading files from DB:', err);
       } finally {
         setIsLoadingFiles(false);
-        if (!selectedFolderId && !isStarredView) {
+        const currentFolderId = searchParams.get('folder');
+        const starred = searchParams.get('starred') === 'true';
+        if (!currentFolderId && !starred) {
           setIsLoading(false);
         }
       }
     };
 
     fetchData();
-  }, [selectedFolderId, isStarredView, searchTerm, session, status]);
+  }, [searchParams, searchTerm, session, status]);
 
   useEffect(() => {
     if (!searchTerm || !searchTerm.trim()) {
@@ -616,12 +625,19 @@ export function Dashboard() {
   };
 
   const handleRenameFolder = async (folderId: string, newName: string) => {
+    const trimmedName = newName.trim();
+
+    // Validate folder name length (max 30 characters)
+    if (trimmedName.length > 30) {
+      throw new Error('Folder name must be 30 characters or less');
+    }
+
     const userEmail = session?.user?.email || null;
     const res = await apiRequest(
       '/api/folders',
       {
         method: 'PATCH',
-        body: JSON.stringify({ folderId, name: newName }),
+        body: JSON.stringify({ folderId, name: trimmedName }),
       },
       userEmail,
     );

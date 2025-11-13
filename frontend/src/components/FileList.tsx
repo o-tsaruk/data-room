@@ -426,6 +426,19 @@ export default function FileList({
   }
 
   if (files.length === 0 && folders.length === 0) {
+    if (searchTerm && searchTerm.trim()) {
+      return (
+        <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
+          <EmptyHeader>
+            <EmptyMedia variant='default'>
+              <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
+            </EmptyMedia>
+            <EmptyTitle>No results found</EmptyTitle>
+            <EmptyDescription>Try adjusting your search terms</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      );
+    }
     return (
       <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
         <EmptyHeader>
