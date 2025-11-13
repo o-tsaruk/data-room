@@ -52,11 +52,9 @@ import {
 } from '@/components/ui/table';
 import { File, Folder } from '@/src/types';
 import { useFileListColumns } from './FileListColumns';
-import { FolderRow } from './FolderRow';
+import { FileListFolderRow } from './FileListFolderRow';
 
 type ActiveView = 'files' | 'starred';
-
-type FolderWithChildren = Folder & { children: FolderWithChildren[] };
 
 const EMPTY_STATE_TEXT: Record<
   ActiveView,
@@ -91,6 +89,7 @@ interface FileListProps {
   activeView: ActiveView;
   isLoading?: boolean;
   currentFolderName?: string | null;
+  currentFolderId?: string | null;
 }
 
 export default function FileList({
@@ -108,6 +107,7 @@ export default function FileList({
   activeView,
   isLoading = false,
   currentFolderName,
+  currentFolderId,
 }: FileListProps) {
   const emptyState = EMPTY_STATE_TEXT[activeView];
 
@@ -115,8 +115,9 @@ export default function FileList({
     if (activeView === 'starred') {
       return emptyState.title;
     }
-    if (currentFolderName) {
-      return `${currentFolderName} folder is empty.`;
+    // Use currentFolderId to determine if we're in a folder, even if name isn't loaded yet
+    if (currentFolderId || currentFolderName) {
+      return currentFolderName ? `${currentFolderName} folder is empty.` : 'This folder is empty.';
     }
     return emptyState.title;
   };
@@ -141,7 +142,6 @@ export default function FileList({
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [selectedFolders, setSelectedFolders] = React.useState<Set<string>>(new Set());
-  const [openFolders, setOpenFolders] = React.useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [folderToDelete, setFolderToDelete] = React.useState<string | null>(null);
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
@@ -158,70 +158,22 @@ export default function FileList({
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'uploadedAt', desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  const folderTree = React.useMemo(() => {
-    const folderMap = new Map<string, FolderWithChildren>();
-    const rootFolders: FolderWithChildren[] = [];
+  const filteredFolders = React.useMemo(() => {
+    let result = folders;
 
-    folders.forEach((folder) => {
-      folderMap.set(folder.id, { ...folder, children: [] });
-    });
+    if (currentFolderId) {
+      result = result.filter((folder) => folder.id !== currentFolderId);
+    }
 
-    folders.forEach((folder) => {
-      const folderWithChildren = folderMap.get(folder.id)!;
-      if (!folder.parentFolderId) {
-        rootFolders.push(folderWithChildren);
-      } else {
-        const parent = folderMap.get(folder.parentFolderId);
-        if (parent) {
-          parent.children.push(folderWithChildren);
-        } else {
-          rootFolders.push(folderWithChildren);
-        }
-      }
-    });
+    if (searchTerm && searchTerm.trim()) {
+      const term = searchTerm.trim().toLowerCase();
+      result = result.filter((folder) => folder.name.toLowerCase().includes(term));
+    }
 
-    return rootFolders;
-  }, [folders]);
+    return result;
+  }, [folders, searchTerm, currentFolderId]);
 
-  const filteredFolderTree = React.useMemo(() => {
-    if (!searchTerm || !searchTerm.trim()) return folderTree;
-    const term = searchTerm.trim().toLowerCase();
-
-    const filterTree = (nodes: FolderWithChildren[]): FolderWithChildren[] => {
-      return nodes
-        .map((node) => {
-          const matches = node.name.toLowerCase().includes(term);
-          const filteredChildren = filterTree(node.children);
-
-          if (matches || filteredChildren.length > 0) {
-            return { ...node, children: filteredChildren };
-          }
-          return null;
-        })
-        .filter((node): node is FolderWithChildren => node !== null);
-    };
-
-    return filterTree(folderTree);
-  }, [folderTree, searchTerm]);
-
-  const getAllFolderIds = React.useCallback((folderTree: FolderWithChildren[]): Set<string> => {
-    const ids = new Set<string>();
-    const collectIds = (nodes: FolderWithChildren[]) => {
-      nodes.forEach((node) => {
-        ids.add(node.id);
-        if (node.children.length > 0) {
-          collectIds(node.children);
-        }
-      });
-    };
-    collectIds(folderTree);
-    return ids;
-  }, []);
-
-  const allFolderIds = React.useMemo(
-    () => getAllFolderIds(filteredFolderTree),
-    [filteredFolderTree, getAllFolderIds],
-  );
+  const allFolderIds = React.useMemo(() => new Set(folders.map((f) => f.id)), [folders]);
 
   const columns = useFileListColumns({
     allFolderIds,
@@ -294,18 +246,6 @@ export default function FileList({
       table.getColumn('name')?.setFilterValue(searchTerm.trim());
     }
   }, [searchTerm, table]);
-
-  const toggleFolder = (folderId: string) => {
-    setOpenFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-      return next;
-    });
-  };
 
   const handleDeleteClick = (folderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -383,97 +323,57 @@ export default function FileList({
     }
   };
 
-  const renderFolderRow = (folder: FolderWithChildren, depth: number = 0) => {
-    const hasChildren = folder.children.length > 0;
-    const isOpen = openFolders.has(folder.id);
-
-    return (
-      <React.Fragment key={`folder-${folder.id}`}>
-        <FolderRow
-          folder={folder}
-          depth={depth}
-          isOpen={isOpen}
-          isSelected={selectedFolders.has(folder.id)}
-          onToggle={() => toggleFolder(folder.id)}
-          onSelect={() => toggleFolderSelection(folder.id)}
-          onClick={() => onFolderClick?.(folder.id)}
-          onRename={(e) => {
-            e?.stopPropagation();
-            setItemToRename({ id: folder.id, name: folder.name, type: 'folder' });
-            setRenameValue(folder.name);
-            setRenameError(null);
-            setRenameDialogOpen(true);
-          }}
-          onDelete={(e) => handleDeleteClick(folder.id, e)}
-        />
-        {hasChildren && isOpen && (
-          <>{folder.children.map((child) => renderFolderRow(child, depth + 1))}</>
-        )}
-      </React.Fragment>
-    );
-  };
-
   if (isLoading) {
     return (
-      <div className='bg-white rounded-lg shadow-lg p-4 min-h-[70vh]'>
-        <div className='flex items-center justify-center h-[50vh]'>
-          <div className='flex flex-col items-center gap-4'>
-            <Spinner className='h-8 w-8' />
-            <p className='text-gray-600'>Loading files...</p>
+      <div className='mt-10'>
+        <div className='bg-white rounded-lg shadow-lg p-4 min-h-[70vh]'>
+          <div className='flex items-center justify-center h-[50vh]'>
+            <div className='flex flex-col items-center gap-4'>
+              <Spinner className='h-8 w-8' />
+              <p className='text-gray-600'>Loading files...</p>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  if (files.length === 0 && folders.length === 0) {
+  const hasFiles = files.length > 0;
+  const hasFolders = filteredFolders.length > 0;
+
+  if (!hasFiles && !hasFolders) {
     if (searchTerm && searchTerm.trim()) {
       return (
+        <div className='mt-10'>
+          <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
+            <EmptyHeader>
+              <EmptyMedia variant='default'>
+                <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
+              </EmptyMedia>
+              <EmptyTitle>No results found</EmptyTitle>
+              <EmptyDescription>Try adjusting your search terms</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </div>
+      );
+    }
+    return (
+      <div className='mt-10'>
         <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
           <EmptyHeader>
             <EmptyMedia variant='default'>
               <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
             </EmptyMedia>
-            <EmptyTitle>No results found</EmptyTitle>
-            <EmptyDescription>Try adjusting your search terms</EmptyDescription>
+            <EmptyTitle>{getEmptyStateTitle()}</EmptyTitle>
+            <EmptyDescription>{emptyState.description}</EmptyDescription>
           </EmptyHeader>
+          {emptyState.showButton && (
+            <EmptyContent>
+              <Button onClick={onOpen}>{emptyState.buttonLabel}</Button>
+            </EmptyContent>
+          )}
         </Empty>
-      );
-    }
-    return (
-      <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
-        <EmptyHeader>
-          <EmptyMedia variant='default'>
-            <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
-          </EmptyMedia>
-          <EmptyTitle>{getEmptyStateTitle()}</EmptyTitle>
-          <EmptyDescription>{emptyState.description}</EmptyDescription>
-        </EmptyHeader>
-        {emptyState.showButton && (
-          <EmptyContent>
-            <Button onClick={onOpen}>{emptyState.buttonLabel}</Button>
-          </EmptyContent>
-        )}
-      </Empty>
-    );
-  }
-
-  if (
-    searchTerm &&
-    searchTerm.trim() &&
-    filteredFiles.length === 0 &&
-    filteredFolderTree.length === 0
-  ) {
-    return (
-      <Empty className='flex flex-col items-center justify-center h-[50vh] p-10 bg-white rounded-xl shadow-lg border border-dashed border-gray-200'>
-        <EmptyHeader>
-          <EmptyMedia variant='default'>
-            <FolderOpen className='h-16 w-16 text-blue-500 mb-3' />
-          </EmptyMedia>
-          <EmptyTitle>No results found</EmptyTitle>
-          <EmptyDescription>Try adjusting your search terms</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      </div>
     );
   }
 
@@ -525,7 +425,23 @@ export default function FileList({
           </TableHeader>
 
           <TableBody>
-            {filteredFolderTree.map((folder) => renderFolderRow(folder))}
+            {filteredFolders.map((folder) => (
+              <FileListFolderRow
+                key={folder.id}
+                folder={folder}
+                isSelected={selectedFolders.has(folder.id)}
+                onSelect={() => toggleFolderSelection(folder.id)}
+                onClick={() => onFolderClick?.(folder.id)}
+                onRename={(e) => {
+                  e?.stopPropagation();
+                  setItemToRename({ id: folder.id, name: folder.name, type: 'folder' });
+                  setRenameValue(folder.name);
+                  setRenameError(null);
+                  setRenameDialogOpen(true);
+                }}
+                onDelete={(e) => handleDeleteClick(folder.id, e)}
+              />
+            ))}
             {filteredFiles.map((row) => (
               <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
                 {row.getVisibleCells().map((cell) => (

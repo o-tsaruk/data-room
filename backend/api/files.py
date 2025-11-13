@@ -45,13 +45,6 @@ def get_files():
             
             folders_response = folders_query.order('created_at', desc=False).execute()
             folders = folders_response.data if folders_response.data else []
-            
-            if folder_id:
-                current_folder_response = supabase.table('folders').select('*').eq('id', folder_id).eq('user_email', email).execute()
-                if current_folder_response.data and len(current_folder_response.data) > 0:
-                    current_folder = current_folder_response.data[0]
-                    if not any(f.get('id') == current_folder['id'] for f in folders):
-                        folders.append(current_folder)
         
         # Convert snake_case to camelCase
         camel_files = [

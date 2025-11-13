@@ -168,10 +168,10 @@ export function Dashboard() {
             setRootFiles(data.files ?? []);
           }
 
-          if (currentFolderId) {
-            const folder = data.folders?.find((f) => f.id === currentFolderId);
+          if (currentFolderId && allFolders.length > 0) {
+            const folder = allFolders.find((f) => f.id === currentFolderId);
             setCurrentFolderName(folder?.name || null);
-          } else {
+          } else if (!currentFolderId) {
             setCurrentFolderName(null);
           }
         }
@@ -179,16 +179,20 @@ export function Dashboard() {
         console.error('[Dashboard] Error loading files from DB:', err);
       } finally {
         setIsLoadingFiles(false);
-        const currentFolderId = searchParams.get('folder');
-        const starred = searchParams.get('starred') === 'true';
-        if (!currentFolderId && !starred) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
     fetchData();
   }, [searchParams, searchTerm, session, status]);
+
+  // Update folder name when allFolders loads or changes
+  useEffect(() => {
+    if (selectedFolderId && allFolders.length > 0) {
+      const folder = allFolders.find((f) => f.id === selectedFolderId);
+      setCurrentFolderName(folder?.name || null);
+    }
+  }, [selectedFolderId, allFolders]);
 
   useEffect(() => {
     if (!searchTerm || !searchTerm.trim()) {
@@ -288,7 +292,7 @@ export function Dashboard() {
         }
 
         if (selectedFolderId) {
-          const folder = data.folders?.find((f) => f.id === selectedFolderId);
+          const folder = allFolders.find((f) => f.id === selectedFolderId);
           setCurrentFolderName(folder?.name || null);
         } else {
           setCurrentFolderName(null);
@@ -297,7 +301,7 @@ export function Dashboard() {
     } catch (err) {
       console.error('[Dashboard] Error loading files from DB:', err);
     }
-  }, [selectedFolderId, isStarredView, session]);
+  }, [selectedFolderId, isStarredView, session, allFolders]);
 
   useEffect(() => {
     fetchAllFolders();
@@ -685,6 +689,7 @@ export function Dashboard() {
                 activeView={isStarredView ? 'starred' : 'files'}
                 isLoading={isLoadingFiles || isSearching}
                 currentFolderName={currentFolderName}
+                currentFolderId={selectedFolderId}
               />
             </>
           )}
