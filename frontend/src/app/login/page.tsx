@@ -13,6 +13,7 @@ export default function LoginPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -20,8 +21,23 @@ export default function LoginPage() {
     }
   }, [status, router]);
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    setEmailError(null);
+  };
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateEmail(email)) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+    setEmailError(null);
     await signIn('email', { email, callbackUrl: '/dashboard' });
   };
 
@@ -50,9 +66,11 @@ export default function LoginPage() {
                   type='email'
                   placeholder='Enter your email'
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={handleEmailChange}
                   required
+                  aria-invalid={emailError ? 'true' : 'false'}
                 />
+                {emailError && <p className='text-destructive text-sm mt-1'>{emailError}</p>}
               </Field>
             </FieldSet>
 
