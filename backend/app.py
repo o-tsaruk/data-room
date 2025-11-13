@@ -18,10 +18,20 @@ db.init_app(app)
 migrate.init_app(app, db)
 CORS(
     app,
-    origins=app.config['CORS_ORIGINS'],
-    supports_credentials=True,
-    methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allow_headers=['Content-Type', 'Authorization']
+    resources={
+        r"/api/*": {
+            "origins": app.config['CORS_ORIGINS'],
+            "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "x-user-email"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": True,
+            "max_age": 3600
+        },
+        r"/*": {
+            "origins": app.config['CORS_ORIGINS'],
+            "supports_credentials": True
+        }
+    }
 )
 
 # Register API blueprint

@@ -33,9 +33,13 @@ class Config:
     
     NEXTAUTH_SECRET = os.environ.get('NEXTAUTH_SECRET')
     NEXTAUTH_URL = os.environ.get('NEXTAUTH_URL', 'http://localhost:3000')
-    # Parse CORS_ORIGINS from comma-separated string, strip whitespace
+    # Parse CORS_ORIGINS from comma-separated string, strip whitespace and trailing slashes
     cors_origins_str = os.environ.get('CORS_ORIGINS', 'http://localhost:3000')
-    CORS_ORIGINS = [origin.strip() for origin in cors_origins_str.split(',') if origin.strip()]
+    CORS_ORIGINS = [
+        origin.strip().rstrip('/') 
+        for origin in cors_origins_str.split(',') 
+        if origin.strip()
+    ]
     JSONIFY_PRETTYPRINT_REGULAR = True
 
 
