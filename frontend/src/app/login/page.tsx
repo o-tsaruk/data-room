@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { AuthErrorDialog } from '@/src/components/AuthErrorDialog';
 
 export default function LoginPage() {
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [isEmailLoading, setIsEmailLoading] = useState(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -38,6 +40,7 @@ export default function LoginPage() {
       return;
     }
     setEmailError(null);
+    setIsEmailLoading(true);
     await signIn('email', { email, callbackUrl: '/dashboard' });
   };
 
@@ -74,8 +77,15 @@ export default function LoginPage() {
               </Field>
             </FieldSet>
 
-            <Button type='submit' className='w-full'>
-              Continue with Email
+            <Button type='submit' className='w-full' disabled={isEmailLoading}>
+              {isEmailLoading ? (
+                <>
+                  <Spinner className='mr-2 h-4 w-4' />
+                  Sending...
+                </>
+              ) : (
+                'Continue with Email'
+              )}
             </Button>
           </form>
 
