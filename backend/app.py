@@ -16,7 +16,13 @@ app.config.from_object(config['default'])
 
 db.init_app(app)
 migrate.init_app(app, db)
-CORS(app, origins=app.config['CORS_ORIGINS'], supports_credentials=True)
+CORS(
+    app,
+    origins=app.config['CORS_ORIGINS'],
+    supports_credentials=True,
+    methods=['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allow_headers=['Content-Type', 'Authorization']
+)
 
 # Register API blueprint
 app.register_blueprint(api_bp)
