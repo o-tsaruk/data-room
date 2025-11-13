@@ -95,6 +95,10 @@ CREATE TABLE public.folders (
   CONSTRAINT folders_parent_folder_id_fkey FOREIGN KEY (parent_folder_id) REFERENCES public.folders(id)
 );
 
+CREATE INDEX idx_folders_user_email ON public.folders(user_email);
+CREATE INDEX idx_folders_parent_folder_id ON public.folders(parent_folder_id);
+CREATE INDEX idx_folders_user_parent ON public.folders(user_email, parent_folder_id);
+
 CREATE TABLE public.files (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_email text,
@@ -110,6 +114,10 @@ CREATE TABLE public.files (
   CONSTRAINT files_user_email_fkey FOREIGN KEY (user_email) REFERENCES public.users(email),
   CONSTRAINT files_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES public.folders(id)
 );
+
+CREATE INDEX idx_files_user_email ON public.files(user_email);
+CREATE INDEX idx_files_user_folder ON public.files(user_email, folder_id);
+CREATE INDEX idx_files_user_starred ON public.files(user_email, starred);
 ```
 
 ## Project Structure
