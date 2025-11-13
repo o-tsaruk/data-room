@@ -4,16 +4,21 @@ A modern file management application built with Next.js that allows users to org
 
 ## Tech Stack
 
-- **Next.js 16** (App Router) - React framework with server-side rendering
+**Frontend:**
+- **Next.js 16** (App Router) - React framework
 - **React 19** - UI library
 - **NextAuth 4** - Authentication with Google OAuth and email magic links
-- **Supabase** - PostgreSQL database with real-time capabilities
-- **Supabase SDK** (`@supabase/supabase-js`) - Database client (used as alternative to ORM)
 - **Tailwind CSS 4** - Utility-first CSS framework
-- **shadcn/ui** - Component library built on Radix UI primitives
-- **TanStack Table** - Table component for file listing
+- **shadcn/ui** - Component library
+- **TanStack Table** - Table component
 - **Sonner** - Toast notifications
 - **Google Picker API** - File selection from Google Drive
+
+**Backend:**
+- **Flask** - Python web framework
+- **Gunicorn** - WSGI HTTP server
+- **Supabase Python SDK** - Database client
+- **Supabase** - PostgreSQL database
 
 ## UI Decisions and Features
 
@@ -124,15 +129,19 @@ src/
 ## Prerequisites
 
 - **Node.js 18+** - JavaScript runtime
+- **Python 3.12+** - Python runtime
 - **Supabase account** - Database hosting
 - **Google Cloud Console** - For Google OAuth and Picker API
 - **SMTP service** (optional) - For email magic link authentication
 
 ## Environment Variables
 
-Create a `.env.local` file in the project root:
+### Frontend (`frontend/.env.local`)
 
 ```env
+# Flask Backend API
+NEXT_PUBLIC_API_URL=http://localhost:5000
+
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
@@ -158,21 +167,36 @@ SMTP_PASSWORD=your_smtp_password
 SMTP_FROM="Data Room <no-reply@yourdomain.com>"
 ```
 
-## Development
+### Backend (`backend/.env`)
 
-### Installation
-
-```bash
-npm install
+```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+CORS_ORIGINS=http://localhost:3000
 ```
 
-### Run Development Server
+## Development
+
+### Backend
 
 ```bash
+cd backend
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+python app.py
+```
+
+Backend runs on `http://localhost:5000`
+
+### Frontend
+
+```bash
+cd frontend
+npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Frontend runs on `http://localhost:3000`
 
 ### Code Quality
 
@@ -183,31 +207,43 @@ npm run lint
 
 ## API Routes
 
-All API routes are located in `/src/app/api/` and use Next.js Route Handlers.
+**Next.js (Auth & Session):**
+- `GET /api/auth/[...nextauth]` - NextAuth authentication
+- `GET /api/session` - Current session
 
-- **`GET /api/auth/[...nextauth]`** - NextAuth.js authentication handlers
-- **`GET /api/session`** - Returns current authenticated session
-- **`GET /api/files`** - Retrieves files (supports `folderId`, `starred`, `search` query params)
-- **`POST /api/files`** - Creates new file records
-- **`DELETE /api/files`** - Deletes file(s) (supports `fileId` or `all=true` query params)
-- **`PATCH /api/files/starred`** - Toggles starred status
-- **`GET /api/folders`** - Retrieves all folders
-- **`POST /api/folders`** - Creates new folder
-- **`DELETE /api/folders`** - Deletes folder (supports `folderId` query param)
-- **`DELETE /api/account`** - Deletes user account
-
-All routes require authentication and filter data by the authenticated user's email.
+**Flask Backend:**
+- `GET /api/files` - Get files (supports `folderId`, `starred`, `search`)
+- `POST /api/files` - Create file records
+- `PATCH /api/files` - Rename file
+- `DELETE /api/files` - Delete file(s) (`fileId` or `all=true`)
+- `PATCH /api/files/starred` - Toggle starred status
+- `GET /api/folders` - Get all folders
+- `POST /api/folders` - Create folder
+- `PATCH /api/folders` - Rename folder
+- `DELETE /api/folders` - Delete folder (`folderId`)
+- `DELETE /api/account` - Delete account
 
 ## Deployment
 
-### Recommended: Vercel
+### Backend (Render)
 
-1. Push your code to GitHub
+1. Push code to GitHub
+2. Create Web Service in Render
+3. Set Root Directory: `backend`
+4. Set Start Command: `gunicorn wsgi:app`
+5. Add environment variables:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `CORS_ORIGINS` (your frontend URL)
+
+### Frontend (Vercel)
+
+1. Push code to GitHub
 2. Import project in Vercel
-3. Add all environment variables in Vercel dashboard
-4. Deploy
-
-Ensure all environment variables from `.env.local` are set in your hosting platform.
+3. Set Root Directory: `frontend`
+4. Add all environment variables from `frontend/.env.local`
+5. Update `NEXT_PUBLIC_API_URL` to your Render backend URL
+6. Deploy
 
 ## Security Considerations
 

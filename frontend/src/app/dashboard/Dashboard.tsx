@@ -11,6 +11,7 @@ import DashboardHeader from '@/src/components/DashboardHeader';
 import DuplicateResolver from '@/src/components/DuplicateResolver';
 import FileList from '@/src/components/FileList';
 import { File, Folder } from '@/src/types';
+import { apiRequest } from '@/src/utils/api';
 import { formatTimestampUTC } from '@/src/utils/common';
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
@@ -112,6 +113,10 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
+    if (status === 'loading' || !session?.user?.email) {
+      return;
+    }
+
     if (searchTerm && searchTerm.trim()) {
       return;
     }
@@ -120,15 +125,17 @@ export function Dashboard() {
 
     const fetchData = async () => {
       try {
+        const userEmail = session?.user?.email;
+        if (!userEmail) return;
         if (isStarredView) {
-          const res = await fetch('/api/files?starred=true', { method: 'GET' });
+          const res = await apiRequest('/api/files?starred=true', { method: 'GET' }, userEmail);
           if (!res.ok) throw new Error('Failed to fetch starred files from DB');
           const data: { files: File[] } = await res.json();
           setSelectedFiles(data.files ?? []);
           setFolders([]);
           setCurrentFolderName(null);
 
-          const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+          const rootRes = await apiRequest('/api/files?folderId=', { method: 'GET' }, userEmail);
           if (rootRes.ok) {
             const rootData: { files: File[] } = await rootRes.json();
             setRootFiles(rootData.files ?? []);
@@ -137,7 +144,7 @@ export function Dashboard() {
           const url = selectedFolderId
             ? `/api/files?folderId=${selectedFolderId}`
             : '/api/files?folderId=';
-          const res = await fetch(url, { method: 'GET' });
+          const res = await apiRequest(url, { method: 'GET' }, userEmail);
 
           if (!res.ok) throw new Error('Failed to fetch files from DB');
           const data: { files: File[]; folders: Folder[] } = await res.json();
@@ -145,7 +152,7 @@ export function Dashboard() {
           setFolders(data.folders ?? []);
 
           if (selectedFolderId) {
-            const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+            const rootRes = await apiRequest('/api/files?folderId=', { method: 'GET' }, userEmail);
             if (rootRes.ok) {
               const rootData: { files: File[] } = await rootRes.json();
               setRootFiles(rootData.files ?? []);
@@ -172,7 +179,7 @@ export function Dashboard() {
     };
 
     fetchData();
-  }, [selectedFolderId, isStarredView, searchTerm]);
+  }, [selectedFolderId, isStarredView, searchTerm, session, status]);
 
   useEffect(() => {
     if (!searchTerm || !searchTerm.trim()) {
@@ -180,12 +187,22 @@ export function Dashboard() {
       return;
     }
 
+    if (status === 'loading' || !session?.user?.email) {
+      return;
+    }
+
     setIsSearching(true);
     const searchTimeout = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/files?search=${encodeURIComponent(searchTerm.trim())}`, {
-          method: 'GET',
-        });
+        const userEmail = session?.user?.email;
+        if (!userEmail) return;
+        const res = await apiRequest(
+          `/api/files?search=${encodeURIComponent(searchTerm.trim())}`,
+          {
+            method: 'GET',
+          },
+          userEmail,
+        );
         if (!res.ok) throw new Error('Failed to search files');
         const data: { files: File[] } = await res.json();
         setSelectedFiles(data.files ?? []);
@@ -198,11 +215,12 @@ export function Dashboard() {
     }, 300);
 
     return () => clearTimeout(searchTimeout);
-  }, [searchTerm]);
+  }, [searchTerm, session, status]);
 
   const fetchAllFolders = useCallback(async () => {
     try {
-      const res = await fetch('/api/folders');
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest('/api/folders', { method: 'GET' }, userEmail);
       if (res.ok) {
         const data: { folders: any[] } = await res.json();
         // Transform from snake_case to camelCase for breadcrumb
@@ -217,18 +235,23 @@ export function Dashboard() {
     } catch (err) {
       console.error('[Dashboard] Error loading all folders:', err);
     }
-  }, []);
+  }, [session]);
 
   const fetchUserFilesFromDB = useCallback(async () => {
+    if (!session?.user?.email) {
+      return;
+    }
+
     try {
+      const userEmail = session.user.email;
       if (isStarredView) {
-        const res = await fetch('/api/files?starred=true', { method: 'GET' });
+        const res = await apiRequest('/api/files?starred=true', { method: 'GET' }, userEmail);
         if (!res.ok) throw new Error('Failed to fetch starred files from DB');
         const data: { files: File[] } = await res.json();
         setSelectedFiles(data.files ?? []);
         setFolders([]);
 
-        const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+        const rootRes = await apiRequest('/api/files?folderId=', { method: 'GET' }, userEmail);
         if (rootRes.ok) {
           const rootData: { files: File[] } = await rootRes.json();
           setRootFiles(rootData.files ?? []);
@@ -237,7 +260,7 @@ export function Dashboard() {
         const url = selectedFolderId
           ? `/api/files?folderId=${selectedFolderId}`
           : '/api/files?folderId=';
-        const res = await fetch(url, { method: 'GET' });
+        const res = await apiRequest(url, { method: 'GET' }, userEmail);
 
         if (!res.ok) throw new Error('Failed to fetch files from DB');
         const data: { files: File[]; folders: Folder[] } = await res.json();
@@ -246,7 +269,7 @@ export function Dashboard() {
         setFolders(data.folders ?? []);
 
         if (selectedFolderId) {
-          const rootRes = await fetch('/api/files?folderId=', { method: 'GET' });
+          const rootRes = await apiRequest('/api/files?folderId=', { method: 'GET' }, userEmail);
           if (rootRes.ok) {
             const rootData: { files: File[] } = await rootRes.json();
             setRootFiles(rootData.files ?? []);
@@ -265,7 +288,7 @@ export function Dashboard() {
     } catch (err) {
       console.error('[Dashboard] Error loading files from DB:', err);
     }
-  }, [selectedFolderId, isStarredView]);
+  }, [selectedFolderId, isStarredView, session]);
 
   useEffect(() => {
     fetchAllFolders();
@@ -461,11 +484,15 @@ export function Dashboard() {
     try {
       const targetFolderId = isStarredView ? null : selectedFolderId;
 
-      const res = await fetch('/api/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files, folderId: targetFolderId }),
-      });
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest(
+        '/api/files',
+        {
+          method: 'POST',
+          body: JSON.stringify({ files, folderId: targetFolderId }),
+        },
+        userEmail,
+      );
 
       if (!res.ok) throw new Error('Failed to store files');
       toast.success('Files saved successfully.');
@@ -490,7 +517,12 @@ export function Dashboard() {
 
   const handleDeleteFolder = async (folderId: string) => {
     try {
-      const res = await fetch(`/api/folders?folderId=${folderId}`, { method: 'DELETE' });
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest(
+        `/api/folders?folderId=${folderId}`,
+        { method: 'DELETE' },
+        userEmail,
+      );
       if (!res.ok) {
         const data = await res.json();
         console.error('Failed to delete folder:', data.error || res.statusText);
@@ -514,11 +546,15 @@ export function Dashboard() {
     const prev = selectedFiles;
     setSelectedFiles((curr) => curr.map((f) => (f.id === fileId ? { ...f, starred } : f)));
     try {
-      const res = await fetch('/api/files/starred', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, starred }),
-      });
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest(
+        '/api/files/starred',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ fileId, starred }),
+        },
+        userEmail,
+      );
       if (!res.ok) {
         const data = await res.json();
         console.error('Failed to update starred:', data.error || res.statusText);
@@ -532,10 +568,14 @@ export function Dashboard() {
 
   const handleRemoveFile = async (fileId: string) => {
     try {
-      const res = await fetch(`/api/files?fileId=${fileId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const userEmail = session?.user?.email || null;
+      const res = await apiRequest(
+        `/api/files?fileId=${fileId}`,
+        {
+          method: 'DELETE',
+        },
+        userEmail,
+      );
 
       if (!res.ok) {
         const errorData = await res.json();
@@ -556,11 +596,15 @@ export function Dashboard() {
   };
 
   const handleRenameFile = async (fileId: string, newName: string) => {
-    const res = await fetch('/api/files', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileId, name: newName }),
-    });
+    const userEmail = session?.user?.email || null;
+    const res = await apiRequest(
+      '/api/files',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ fileId, name: newName }),
+      },
+      userEmail,
+    );
 
     if (!res.ok) {
       const errorData = await res.json();
@@ -572,11 +616,15 @@ export function Dashboard() {
   };
 
   const handleRenameFolder = async (folderId: string, newName: string) => {
-    const res = await fetch('/api/folders', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folderId, name: newName }),
-    });
+    const userEmail = session?.user?.email || null;
+    const res = await apiRequest(
+      '/api/folders',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ folderId, name: newName }),
+      },
+      userEmail,
+    );
 
     if (!res.ok) {
       const errorData = await res.json();
